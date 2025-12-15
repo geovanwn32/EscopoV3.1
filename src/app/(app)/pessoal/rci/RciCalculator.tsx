@@ -1,4 +1,5 @@
 
+
 'use client';
 import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -16,6 +17,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useToast } from '@/hooks/use-toast';
+import { Rubrica, CalculationResult, SavedCalculation } from '@/types/pessoal';
+
 
 // Simplified tax brackets for demonstration
 const inssRate = 0.11;
@@ -31,29 +34,6 @@ const irrfBrackets = [
 ];
 const irrfSimplifiedDeduction = 564.80;
 
-interface Rubrica {
-    id: number;
-    label: string;
-    value: number;
-}
-
-interface CalculationResult {
-    proventos: Rubrica[];
-    descontos: Rubrica[];
-    totalProventos: number;
-    totalDescontos: number;
-    liquido: number;
-    baseInss: number;
-    baseIrrf: number;
-}
-
-interface SavedCalculation {
-    id: number;
-    type: 'RCI' | 'Folha';
-    socioName: string;
-    date: string;
-    netValue: number;
-}
 
 export default function RciCalculator() {
     const { toast } = useToast();
@@ -75,6 +55,25 @@ export default function RciCalculator() {
     const selectedSocio = useMemo(() => {
         return socios.find(s => s.id.toString() === selectedSocioId);
     }, [selectedSocioId, socios]);
+
+    useEffect(() => {
+        const editDataString = sessionStorage.getItem('edit-calculation');
+        if (editDataString) {
+            const editData: SavedCalculation = JSON.parse(editDataString);
+            if (editData.type === 'RCI') {
+                setSelectedSocioId(editData.socioId || '');
+                setProLaboreValue(editData.proLaboreValue || 0);
+                setManualProventos(editData.manualProventos || []);
+                setManualDescontos(editData.manualDescontos || []);
+                handleCalculate(
+                    editData.proLaboreValue || 0,
+                    editData.manualProventos || [],
+                    editData.manualDescontos || []
+                );
+            }
+            sessionStorage.removeItem('edit-calculation');
+        }
+    }, []);
 
     useEffect(() => {
         if (selectedSocio) {
@@ -117,8 +116,12 @@ export default function RciCalculator() {
     };
 
 
-    const handleCalculate = () => {
-        if (proLaboreValue <= 0) {
+    const handleCalculate = (
+        currentProLabore = proLaboreValue, 
+        currentProventos = manualProventos, 
+        currentDescontos = manualDescontos
+    ) => {
+        if (currentProLabore <= 0) {
             toast({ variant: 'destructive', title: 'Valor inválido', description: 'O valor do pró-labore deve ser maior que zero.' });
             return;
         }
@@ -128,10 +131,10 @@ export default function RciCalculator() {
 
         // Simulate calculation delay
         setTimeout(() => {
-            const totalManualProventos = manualProventos.reduce((acc, p) => acc + p.value, 0);
-            const totalManualDescontos = manualDescontos.reduce((acc, p) => acc + p.value, 0);
+            const totalManualProventos = currentProventos.reduce((acc, p) => acc + p.value, 0);
+            const totalManualDescontos = currentDescontos.reduce((acc, p) => acc + p.value, 0);
 
-            const baseInss = proLaboreValue + totalManualProventos;
+            const baseInss = currentProLabore + totalManualProventos;
 
             // INSS Calculation
             let inss = baseInss > inssTeto ? inssValorTeto : baseInss * inssRate;
@@ -169,13 +172,13 @@ export default function RciCalculator() {
             const liquido = totalProventos - totalDescontos;
             
             const proventos = [
-                { id: 0, label: "Pró-labore", value: proLaboreValue },
-                ...manualProventos.filter(p => p.label && p.value > 0),
+                { id: 0, label: "Pró-labore", value: currentProLabore },
+                ...currentProventos.filter(p => p.label && p.value > 0),
             ];
             
             const descontos = [
                 ...descontosCalculados,
-                ...manualDescontos.filter(d => d.label && d.value > 0),
+                ...currentDescontos.filter(d => d.label && d.value > 0),
             ];
 
             setCalculation({
@@ -201,9 +204,14 @@ export default function RciCalculator() {
         const newSavedCalc: SavedCalculation = {
             id: Date.now(),
             type: 'RCI',
-            socioName: selectedSocio.nome,
             date: new Date().toISOString(),
             netValue: calculation.liquido,
+            socioId: selectedSocioId,
+            socioName: selectedSocio.nome,
+            proLaboreValue: proLaboreValue,
+            manualProventos: manualProventos,
+            manualDescontos: manualDescontos,
+            calculation: calculation,
         };
 
         setSavedCalculations(prev => [newSavedCalc, ...prev]);
@@ -407,9 +415,9 @@ export default function RciCalculator() {
                                 <CardDescription>Resultado do cálculo do pró-labore.</CardDescription>
                             </div>
                              <div className="flex gap-2">
-                                <Button onClick={handleCalculate} disabled={proLaboreValue <= 0 || isLoading}>
+                                <Button onClick={() => handleCalculate()} disabled={proLaboreValue <= 0 || isLoading}>
                                     {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Calculator className="mr-2 h-4 w-4" />}
-                                    {isLoading ? "Calculando..." : "Calcular"}
+                                    {isLoading ? "Recalculando..." : "Calcular"}
                                 </Button>
                             </div>
                         </div>

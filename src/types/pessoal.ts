@@ -1,4 +1,5 @@
 
+
 export interface Dependente {
     id: number;
     nome: string;
@@ -57,4 +58,42 @@ export interface Funcionario {
     dependentes?: Dependente[];
     // Anotações na Carteira de Trabalho
     anotacoesCarteira?: AnotacaoCarteira[];
+}
+
+
+export interface Rubrica {
+    id: number;
+    label: string;
+    value: number;
+}
+
+export interface CalculationResult {
+    proventos: Rubrica[];
+    descontos: Rubrica[];
+    totalProventos: number;
+    totalDescontos: number;
+    liquido: number;
+    baseInss: number;
+    baseIrrf: number;
+}
+
+export interface SavedCalculation {
+    id: number;
+    type: 'RCI' | 'Folha';
+    date: string;
+    netValue: number;
+    // RCI specific
+    socioId?: string;
+    socioName?: string;
+    proLaboreValue?: number;
+    manualProventos?: Rubrica[];
+    manualDescontos?: Rubrica[];
+    // Folha specific
+    employeeId?: string;
+    employeeName?: string;
+    mesCompetencia?: string;
+    faltas?: number;
+    horasExtras50?: number;
+    horasExtras100?: number;
+    calculation?: CalculationResult | null;
 }

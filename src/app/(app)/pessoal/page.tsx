@@ -2,13 +2,15 @@
 'use client';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Calculator, CalendarOff, HandCoins, UserMinus, Percent, Briefcase, History, MoreVertical, FileDown } from 'lucide-react';
+import { Calculator, CalendarOff, HandCoins, UserMinus, Percent, Briefcase, History, MoreVertical, FileDown, Pencil } from 'lucide-react';
 import Link from 'next/link';
 import { useCompany } from '@/hooks/use-company';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
+import { SavedCalculation } from '@/types/pessoal';
+import { useRouter } from 'next/navigation';
 
 const calculators = [
     {
@@ -55,18 +57,19 @@ const calculators = [
     },
 ]
 
-interface SavedCalculation {
-    id: number;
-    type: 'RCI' | 'Folha';
-    socioName: string;
-    date: string;
-    netValue: number;
-}
-
-
 function RecentCalculations() {
+    const router = useRouter();
     const { useScopedData } = useCompany();
-    const [savedCalculations] = useScopedData<SavedCalculation[]>('pessoal-calculos-salvos', []);
+    const [savedCalculations, setSavedCalculations] = useScopedData<SavedCalculation[]>('pessoal-calculos-salvos', []);
+    
+    const handleEdit = (calc: SavedCalculation) => {
+        sessionStorage.setItem('edit-calculation', JSON.stringify(calc));
+        if (calc.type === 'RCI') {
+            router.push('/pessoal/rci');
+        } else if (calc.type === 'Folha') {
+            router.push('/pessoal/folha-de-pagamento');
+        }
+    };
 
     return (
         <Card>
@@ -76,7 +79,7 @@ function RecentCalculations() {
                     Cálculos Salvos Recentemente
                 </CardTitle>
                 <CardDescription>
-                    Aqui estão os últimos cálculos de pró-labore e folhas de pagamento que você salvou.
+                    Aqui estão os últimos cálculos de pró-labore e folhas de pagamento que você salvou. Clique duas vezes em uma linha para editar.
                 </CardDescription>
             </CardHeader>
             <CardContent>
@@ -94,10 +97,10 @@ function RecentCalculations() {
                         <TableBody>
                             {savedCalculations.length > 0 ? (
                                 savedCalculations.slice(0, 5).map(calc => (
-                                    <TableRow key={calc.id}>
+                                    <TableRow key={calc.id} onDoubleClick={() => handleEdit(calc)} className="cursor-pointer">
                                         <TableCell>{format(new Date(calc.date), 'dd/MM/yyyy')}</TableCell>
                                         <TableCell>{calc.type}</TableCell>
-                                        <TableCell className="font-medium">{calc.socioName}</TableCell>
+                                        <TableCell className="font-medium">{calc.socioName || calc.employeeName}</TableCell>
                                         <TableCell className="text-right font-mono">{calc.netValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
                                         <TableCell>
                                             <DropdownMenu>
@@ -105,6 +108,9 @@ function RecentCalculations() {
                                                     <Button variant="ghost" size="icon"><MoreVertical className="h-4 w-4" /></Button>
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end">
+                                                     <DropdownMenuItem onClick={() => handleEdit(calc)}>
+                                                        <Pencil className="mr-2 h-4 w-4" /> Editar
+                                                    </DropdownMenuItem>
                                                     <DropdownMenuItem>
                                                         <FileDown className="mr-2 h-4 w-4" /> Baixar PDF
                                                     </DropdownMenuItem>
