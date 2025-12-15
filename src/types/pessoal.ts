@@ -88,12 +88,14 @@ export interface SavedCalculation {
     proLaboreValue?: number;
     manualProventos?: Rubrica[];
     manualDescontos?: Rubrica[];
+    // Common
+    mesCompetencia?: string;
     // Folha specific
     employeeId?: string;
     employeeName?: string;
-    mesCompetencia?: string;
     faltas?: number;
     horasExtras50?: number;
     horasExtras100?: number;
     calculation?: CalculationResult | null;
 }
+

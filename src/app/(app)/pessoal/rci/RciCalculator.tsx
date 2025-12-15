@@ -43,6 +43,7 @@ export default function RciCalculator() {
     
     const [selectedSocioId, setSelectedSocioId] = useState<string>('');
     const [proLaboreValue, setProLaboreValue] = useState<number>(0);
+    const [mesCompetencia, setMesCompetencia] = useState<string>(`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`);
     
     const [manualProventos, setManualProventos] = useState<Rubrica[]>([]);
     const [manualDescontos, setManualDescontos] = useState<Rubrica[]>([]);
@@ -63,6 +64,7 @@ export default function RciCalculator() {
             if (editData.type === 'RCI') {
                 setSelectedSocioId(editData.socioId || '');
                 setProLaboreValue(editData.proLaboreValue || 0);
+                setMesCompetencia(editData.mesCompetencia || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`);
                 setManualProventos(editData.manualProventos || []);
                 setManualDescontos(editData.manualDescontos || []);
                 handleCalculate(
@@ -209,6 +211,7 @@ export default function RciCalculator() {
             socioId: selectedSocioId,
             socioName: selectedSocio.nome,
             proLaboreValue: proLaboreValue,
+            mesCompetencia: mesCompetencia,
             manualProventos: manualProventos,
             manualDescontos: manualDescontos,
             calculation: calculation,
@@ -227,6 +230,9 @@ export default function RciCalculator() {
         const pageHeight = doc.internal.pageSize.height;
         const pageWidth = doc.internal.pageSize.width;
         const margin = 14;
+        
+        const competenciaDate = new Date(mesCompetencia + '-02');
+        const competenciaFormatted = competenciaDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
         const drawReceipt = (startY: number, title: string) => {
             // Header
@@ -236,8 +242,7 @@ export default function RciCalculator() {
             
             doc.setFontSize(10);
             doc.setFont('helvetica', 'normal');
-            const competencia = `Competência: ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`;
-            doc.text(competencia, pageWidth - margin, startY + 8, { align: 'right' });
+            doc.text(`Competência: ${competenciaFormatted}`, pageWidth - margin, startY + 8, { align: 'right' });
             
             // Company and Partner Info
             autoTable(doc, {
@@ -346,7 +351,7 @@ export default function RciCalculator() {
             <div className="lg:col-span-1 space-y-6">
                 <Card>
                     <CardHeader>
-                        <CardTitle>1. Dados do Sócio</CardTitle>
+                        <CardTitle>1. Dados do Cálculo</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div className="space-y-2">
@@ -366,9 +371,15 @@ export default function RciCalculator() {
                                 </SelectContent>
                             </Select>
                         </div>
-                         <div className="space-y-2">
-                            <Label htmlFor="proLaboreValue">Valor do Pró-labore (R$)</Label>
-                            <MoneyInput id="proLaboreValue" value={proLaboreValue} onValueChange={setProLaboreValue} />
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="proLaboreValue">Pró-labore (R$)</Label>
+                                <MoneyInput id="proLaboreValue" value={proLaboreValue} onValueChange={setProLaboreValue} />
+                            </div>
+                             <div className="space-y-2">
+                                <Label htmlFor="month">Competência</Label>
+                                <Input id="month" type="month" value={mesCompetencia} onChange={e => setMesCompetencia(e.target.value)} />
+                            </div>
                         </div>
                     </CardContent>
                 </Card>
@@ -502,3 +513,4 @@ export default function RciCalculator() {
         </div>
     );
 }
+
