@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Calculator, Loader2, ArrowDownCircle, ArrowUpCircle, ArrowRight } from 'lucide-react';
+import { Calculator, Loader2, ArrowDownCircle, ArrowUpCircle, ArrowRight, Plus, Trash2, Save, FileDown } from 'lucide-react';
 import { Table, TableBody, TableCell, TableRow, TableFooter, TableHead, TableHeader } from '@/components/ui/table';
 import { Separator } from '@/components/ui/separator';
 import { MoneyInput } from '@/components/ui/money-input';
@@ -15,6 +15,7 @@ import { Socio } from '@/types/socios';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { useToast } from '@/hooks/use-toast';
 
 // Simplified tax brackets for demonstration
 const inssRate = 0.11;
@@ -30,9 +31,15 @@ const irrfBrackets = [
 ];
 const irrfSimplifiedDeduction = 564.80;
 
+interface Rubrica {
+    id: number;
+    label: string;
+    value: number;
+}
+
 interface CalculationResult {
-    proventos: { label: string; value: number }[];
-    descontos: { label: string; value: number }[];
+    proventos: Rubrica[];
+    descontos: Rubrica[];
     totalProventos: number;
     totalDescontos: number;
     liquido: number;
@@ -40,11 +47,26 @@ interface CalculationResult {
     baseIrrf: number;
 }
 
+interface SavedCalculation {
+    id: number;
+    type: 'RCI' | 'Folha';
+    socioName: string;
+    date: string;
+    netValue: number;
+}
+
 export default function RciCalculator() {
+    const { toast } = useToast();
     const { useScopedData, companies, currentCompany } = useCompany();
     const [socios] = useScopedData<Socio[]>('cadastros-socios', []);
+    const [savedCalculations, setSavedCalculations] = useScopedData<SavedCalculation[]>('pessoal-calculos-salvos', []);
+    
     const [selectedSocioId, setSelectedSocioId] = useState<string>('');
     const [proLaboreValue, setProLaboreValue] = useState<number>(0);
+    
+    const [manualProventos, setManualProventos] = useState<Rubrica[]>([]);
+    const [manualDescontos, setManualDescontos] = useState<Rubrica[]>([]);
+
     const [isLoading, setIsLoading] = useState(false);
     const [calculation, setCalculation] = useState<CalculationResult | null>(null);
 
@@ -61,10 +83,43 @@ export default function RciCalculator() {
             setProLaboreValue(0);
         }
         setCalculation(null);
+        setManualProventos([]);
+        setManualDescontos([]);
     }, [selectedSocio]);
+
+    const handleAddRubrica = (type: 'provento' | 'desconto') => {
+        const newRubrica: Rubrica = { id: Date.now(), label: '', value: 0 };
+        if (type === 'provento') {
+            setManualProventos(prev => [...prev, newRubrica]);
+        } else {
+            setManualDescontos(prev => [...prev, newRubrica]);
+        }
+    };
+
+    const handleUpdateRubrica = (type: 'provento' | 'desconto', id: number, field: 'label' | 'value', fieldValue: string | number) => {
+        const updater = (prev: Rubrica[]) => prev.map(r => 
+            r.id === id ? { ...r, [field]: fieldValue } : r
+        );
+        if (type === 'provento') {
+            setManualProventos(updater);
+        } else {
+            setManualDescontos(updater);
+        }
+    };
+
+    const handleRemoveRubrica = (type: 'provento' | 'desconto', id: number) => {
+        const remover = (prev: Rubrica[]) => prev.filter(r => r.id !== id);
+        if (type === 'provento') {
+            setManualProventos(remover);
+        } else {
+            setManualDescontos(remover);
+        }
+    };
+
 
     const handleCalculate = () => {
         if (proLaboreValue <= 0) {
+            toast({ variant: 'destructive', title: 'Valor inválido', description: 'O valor do pró-labore deve ser maior que zero.' });
             return;
         }
 
@@ -73,7 +128,10 @@ export default function RciCalculator() {
 
         // Simulate calculation delay
         setTimeout(() => {
-            const baseInss = proLaboreValue;
+            const totalManualProventos = manualProventos.reduce((acc, p) => acc + p.value, 0);
+            const totalManualDescontos = manualDescontos.reduce((acc, p) => acc + p.value, 0);
+
+            const baseInss = proLaboreValue + totalManualProventos;
 
             // INSS Calculation
             let inss = baseInss > inssTeto ? inssValorTeto : baseInss * inssRate;
@@ -82,7 +140,6 @@ export default function RciCalculator() {
             // IRRF Calculation
             const baseIrrf = baseInss - inss;
             
-            // Standard deduction calculation
             let irrfFromStandardDeduction = 0;
             for (const bracket of irrfBrackets) {
                 if (baseIrrf <= bracket.limit) {
@@ -91,30 +148,34 @@ export default function RciCalculator() {
                 }
             }
 
-            // Simplified deduction calculation
             const baseIrrfSimplified = baseInss - irrfSimplifiedDeduction;
-             let irrfFromSimplifiedDeduction = 0;
-             for (const bracket of irrfBrackets) {
+            let irrfFromSimplifiedDeduction = 0;
+            for (const bracket of irrfBrackets) {
                 if (baseIrrfSimplified <= bracket.limit) {
                     irrfFromSimplifiedDeduction = (baseIrrfSimplified * bracket.rate) - bracket.deduction;
                     break;
                 }
             }
             
-            // IRRF is the lesser of the two calculation methods
             const irrf = Math.max(0, Math.min(irrfFromStandardDeduction, irrfFromSimplifiedDeduction));
 
-            const totalProventos = proLaboreValue;
-            const totalDescontos = inss + irrf;
+            const totalProventos = baseInss;
+            const descontosCalculados = [
+                { id: 1, label: "INSS (11%)", value: inss },
+                { id: 2, label: "IRRF", value: irrf },
+            ];
+            
+            const totalDescontos = descontosCalculados.reduce((acc, d) => acc + d.value, 0) + totalManualDescontos;
             const liquido = totalProventos - totalDescontos;
             
             const proventos = [
-                { label: "Pró-labore", value: proLaboreValue },
+                { id: 0, label: "Pró-labore", value: proLaboreValue },
+                ...manualProventos.filter(p => p.label && p.value > 0),
             ];
             
             const descontos = [
-                { label: "INSS (11%)", value: inss },
-                { label: "IRRF", value: irrf },
+                ...descontosCalculados,
+                ...manualDescontos.filter(d => d.label && d.value > 0),
             ];
 
             setCalculation({
@@ -128,8 +189,26 @@ export default function RciCalculator() {
             });
 
             setIsLoading(false);
-        }, 1000);
+        }, 500);
     }
+
+    const handleSaveCalculation = () => {
+        if (!calculation || !selectedSocio) {
+            toast({ variant: 'destructive', title: 'Cálculo incompleto', description: 'Realize um cálculo antes de salvar.' });
+            return;
+        }
+
+        const newSavedCalc: SavedCalculation = {
+            id: Date.now(),
+            type: 'RCI',
+            socioName: selectedSocio.nome,
+            date: new Date().toISOString(),
+            netValue: calculation.liquido,
+        };
+
+        setSavedCalculations(prev => [newSavedCalc, ...prev]);
+        toast({ title: 'Cálculo Salvo!', description: 'O resultado foi salvo na Central de Cálculos.' });
+    };
     
     const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -173,8 +252,8 @@ export default function RciCalculator() {
                 startY: finalY,
                 head: [['Código', 'Descrição', 'Proventos', 'Descontos']],
                 body: [
-                    ...calculation.proventos.map(p => ['101', p.label, formatCurrency(p.value), '']),
-                    ...calculation.descontos.map(d => ['201', d.label, '', formatCurrency(d.value)]),
+                    ...calculation.proventos.map((p, i) => [`10${i+1}`, p.label, formatCurrency(p.value), '']),
+                    ...calculation.descontos.map((d, i) => [`20${i+1}`, d.label, '', formatCurrency(d.value)]),
                 ],
                 theme: 'grid',
                 styles: { fontSize: 9, cellPadding: 2 },
@@ -255,12 +334,11 @@ export default function RciCalculator() {
     };
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-1">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+            <div className="lg:col-span-1 space-y-6">
                 <Card>
                     <CardHeader>
-                        <CardTitle>Dados para Cálculo do RCI</CardTitle>
-                        <CardDescription>Preencha os dados do sócio e o valor do pró-labore.</CardDescription>
+                        <CardTitle>1. Dados do Sócio</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div className="space-y-2">
@@ -280,24 +358,61 @@ export default function RciCalculator() {
                                 </SelectContent>
                             </Select>
                         </div>
-                        <div className="space-y-2">
+                         <div className="space-y-2">
                             <Label htmlFor="proLaboreValue">Valor do Pró-labore (R$)</Label>
                             <MoneyInput id="proLaboreValue" value={proLaboreValue} onValueChange={setProLaboreValue} />
                         </div>
                     </CardContent>
-                    <CardFooter>
-                         <Button onClick={handleCalculate} disabled={proLaboreValue <= 0 || isLoading} className="w-full">
-                            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Calculator className="mr-2 h-4 w-4" />}
-                            {isLoading ? "Calculando..." : "Calcular RCI"}
-                        </Button>
-                    </CardFooter>
                 </Card>
+
+                 <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2"><ArrowUpCircle className="h-5 w-5 text-emerald-500" /> 2. Proventos Manuais</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                        {manualProventos.map(p => (
+                            <div key={p.id} className="flex gap-2 items-center">
+                                <Input placeholder="Descrição" value={p.label} onChange={(e) => handleUpdateRubrica('provento', p.id, 'label', e.target.value)} />
+                                <MoneyInput id={`provento-${p.id}`} value={p.value} onValueChange={(val) => handleUpdateRubrica('provento', p.id, 'value', val)} />
+                                <Button variant="ghost" size="icon" onClick={() => handleRemoveRubrica('provento', p.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                            </div>
+                        ))}
+                        <Button variant="outline" size="sm" className="w-full" onClick={() => handleAddRubrica('provento')}><Plus className="mr-2 h-4 w-4" />Adicionar Provento</Button>
+                    </CardContent>
+                </Card>
+
+                 <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2"><ArrowDownCircle className="h-5 w-5 text-red-500" /> 3. Descontos Manuais</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                        {manualDescontos.map(d => (
+                            <div key={d.id} className="flex gap-2 items-center">
+                                <Input placeholder="Descrição" value={d.label} onChange={(e) => handleUpdateRubrica('desconto', d.id, 'label', e.target.value)} />
+                                <MoneyInput id={`desconto-${d.id}`} value={d.value} onValueChange={(val) => handleUpdateRubrica('desconto', d.id, 'value', val)} />
+                                <Button variant="ghost" size="icon" onClick={() => handleRemoveRubrica('desconto', d.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                            </div>
+                        ))}
+                        <Button variant="outline" size="sm" className="w-full" onClick={() => handleAddRubrica('desconto')}><Plus className="mr-2 h-4 w-4" />Adicionar Desconto</Button>
+                    </CardContent>
+                </Card>
+
             </div>
             <div className="lg:col-span-2">
                 <Card className="min-h-[420px]">
                     <CardHeader>
-                        <CardTitle>Demonstrativo de Pagamento</CardTitle>
-                        <CardDescription>Resultado do cálculo do pró-labore.</CardDescription>
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <CardTitle>4. Demonstrativo de Pagamento</CardTitle>
+                                <CardDescription>Resultado do cálculo do pró-labore.</CardDescription>
+                            </div>
+                             <div className="flex gap-2">
+                                <Button onClick={handleCalculate} disabled={proLaboreValue <= 0 || isLoading}>
+                                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Calculator className="mr-2 h-4 w-4" />}
+                                    {isLoading ? "Calculando..." : "Calcular"}
+                                </Button>
+                            </div>
+                        </div>
                     </CardHeader>
                     <CardContent>
                         {calculation ? (
@@ -322,14 +437,14 @@ export default function RciCalculator() {
                                     </TableHeader>
                                     <TableBody>
                                         {calculation.proventos.map(item => (
-                                            <TableRow key={item.label}>
+                                            <TableRow key={`p-${item.id}`}>
                                                 <TableCell className="font-medium">{item.label}</TableCell>
                                                 <TableCell className="text-right font-mono text-emerald-600">{item.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                                                 <TableCell></TableCell>
                                             </TableRow>
                                         ))}
                                         {calculation.descontos.map(item => (
-                                            <TableRow key={item.label}>
+                                            <TableRow key={`d-${item.id}`}>
                                                 <TableCell className="font-medium">{item.label}</TableCell>
                                                 <TableCell></TableCell>
                                                 <TableCell className="text-right font-mono text-red-600">{item.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
@@ -359,17 +474,19 @@ export default function RciCalculator() {
                         ) : (
                              <div className="flex flex-col items-center justify-center text-center p-8 text-muted-foreground min-h-[250px]">
                                 <Calculator className="h-12 w-12 mb-4" />
-                                <p className="font-medium">Preencha os dados e clique em "Calcular RCI"</p>
+                                <p className="font-medium">Preencha os dados e clique em "Calcular"</p>
                                 <p className="text-sm">O resultado do cálculo aparecerá aqui.</p>
                             </div>
                         )}
                     </CardContent>
                     {calculation && (
                         <CardFooter className="justify-end gap-2 border-t pt-6 mt-4">
-                             <Button variant="outline" onClick={handleSavePdf} disabled={!calculation}>Salvar PDF</Button>
-                             <Button>
-                                Finalizar e Contabilizar <ArrowRight className="ml-2 h-4 w-4" />
-                            </Button>
+                             <Button variant="outline" onClick={handleSaveCalculation} disabled={!calculation}>
+                                <Save className="mr-2 h-4 w-4" /> Salvar Cálculo
+                             </Button>
+                             <Button variant="outline" onClick={handleSavePdf} disabled={!calculation}>
+                                <FileDown className="mr-2 h-4 w-4" /> Salvar PDF
+                             </Button>
                         </CardFooter>
                     )}
                 </Card>

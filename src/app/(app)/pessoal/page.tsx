@@ -1,7 +1,12 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Calculator, CalendarOff, HandCoins, UserMinus, Percent, Briefcase } from 'lucide-react';
+import { Calculator, CalendarOff, HandCoins, UserMinus, Percent, Briefcase, History, MoreVertical, FileDown } from 'lucide-react';
 import Link from 'next/link';
+import { useCompany } from '@/hooks/use-company';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { format } from 'date-fns';
+import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 
 const calculators = [
     {
@@ -48,6 +53,80 @@ const calculators = [
     },
 ]
 
+interface SavedCalculation {
+    id: number;
+    type: 'RCI' | 'Folha';
+    socioName: string;
+    date: string;
+    netValue: number;
+}
+
+
+function RecentCalculations() {
+    const { useScopedData } = useCompany();
+    const [savedCalculations] = useScopedData<SavedCalculation[]>('pessoal-calculos-salvos', []);
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                    <History className="h-6 w-6" />
+                    Cálculos Salvos Recentemente
+                </CardTitle>
+                <CardDescription>
+                    Aqui estão os últimos cálculos de pró-labore e folhas de pagamento que você salvou.
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                <div className="rounded-md border">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Data</TableHead>
+                                <TableHead>Tipo</TableHead>
+                                <TableHead>Sócio / Funcionário</TableHead>
+                                <TableHead className="text-right">Valor Líquido</TableHead>
+                                <TableHead className="w-[64px]"></TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {savedCalculations.length > 0 ? (
+                                savedCalculations.slice(0, 5).map(calc => (
+                                    <TableRow key={calc.id}>
+                                        <TableCell>{format(new Date(calc.date), 'dd/MM/yyyy')}</TableCell>
+                                        <TableCell>{calc.type}</TableCell>
+                                        <TableCell className="font-medium">{calc.socioName}</TableCell>
+                                        <TableCell className="text-right font-mono">{calc.netValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
+                                        <TableCell>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" size="icon"><MoreVertical className="h-4 w-4" /></Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuItem>
+                                                        <FileDown className="mr-2 h-4 w-4" /> Baixar PDF
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </TableCell>
+                                    </TableRow>
+                                ))
+                            ) : (
+                                <TableRow>
+                                    <TableCell colSpan={5} className="h-24 text-center">
+                                        Nenhum cálculo salvo ainda.
+                                    </TableCell>
+                                </TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
+            </CardContent>
+        </Card>
+    )
+}
+
+
 export default function PessoalPage() {
     return (
         <div className="space-y-6">
@@ -77,6 +156,8 @@ export default function PessoalPage() {
                     ))}
                 </CardContent>
             </Card>
+
+            <RecentCalculations />
         </div>
     );
 }
