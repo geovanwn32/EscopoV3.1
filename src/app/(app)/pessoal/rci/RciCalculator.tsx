@@ -43,7 +43,7 @@ export default function RciCalculator() {
     
     const [selectedSocioId, setSelectedSocioId] = useState<string>('');
     const [proLaboreValue, setProLaboreValue] = useState<number>(0);
-    const [mesCompetencia, setMesCompetencia] = useState<string>(`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`);
+    const [mesCompetencia, setMesCompetencia] = useState<string>(`${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()}`);
     
     const [manualProventos, setManualProventos] = useState<Rubrica[]>([]);
     const [manualDescontos, setManualDescontos] = useState<Rubrica[]>([]);
@@ -64,7 +64,7 @@ export default function RciCalculator() {
             if (editData.type === 'RCI') {
                 setSelectedSocioId(editData.socioId || '');
                 setProLaboreValue(editData.proLaboreValue || 0);
-                setMesCompetencia(editData.mesCompetencia || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`);
+                setMesCompetencia(editData.mesCompetencia || `${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()}`);
                 setManualProventos(editData.manualProventos || []);
                 setManualDescontos(editData.manualDescontos || []);
                 handleCalculate(
@@ -231,7 +231,8 @@ export default function RciCalculator() {
         const pageWidth = doc.internal.pageSize.width;
         const margin = 14;
         
-        const competenciaDate = new Date(mesCompetencia + '-02');
+        const [mes, ano] = mesCompetencia.split('/');
+        const competenciaDate = new Date(parseInt(ano), parseInt(mes) - 1, 2);
         const competenciaFormatted = competenciaDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
         const drawReceipt = (startY: number, title: string) => {
@@ -343,7 +344,15 @@ export default function RciCalculator() {
         drawReceipt(separatorY + 10, 'Via do Contribuinte');
 
 
-        doc.save(`RCI_${selectedSocio.nome.replace(/\s/g, '_')}_${new Date().toISOString().slice(0,7)}.pdf`);
+        doc.save(`RCI_${selectedSocio.nome.replace(/\s/g, '_')}_${mesCompetencia.replace('/', '-')}.pdf`);
+    };
+
+    const handleMesCompetenciaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        let value = e.target.value.replace(/\D/g, '');
+        if (value.length > 2) {
+            value = `${value.slice(0, 2)}/${value.slice(2, 6)}`;
+        }
+        setMesCompetencia(value);
     };
 
     return (
@@ -374,7 +383,14 @@ export default function RciCalculator() {
                         </div>
                          <div className="space-y-2">
                             <Label htmlFor="month">Competência</Label>
-                            <Input id="month" type="month" value={mesCompetencia} onChange={e => setMesCompetencia(e.target.value)} />
+                            <Input 
+                                id="month" 
+                                type="text" 
+                                placeholder="MM/AAAA"
+                                value={mesCompetencia} 
+                                onChange={handleMesCompetenciaChange}
+                                maxLength={7}
+                            />
                         </div>
                     </div>
                      <div className="space-y-2">
