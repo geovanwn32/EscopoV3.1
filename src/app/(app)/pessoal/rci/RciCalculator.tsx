@@ -347,13 +347,14 @@ export default function RciCalculator() {
     };
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-            <div className="lg:col-span-1 space-y-6">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>1. Dados do Cálculo</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
+        <div className="max-w-4xl mx-auto space-y-6">
+            <Card>
+                <CardHeader>
+                    <CardTitle>1. Dados para Cálculo do RCI</CardTitle>
+                    <CardDescription>Preencha os dados do sócio e o valor do pró-labore.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label htmlFor="socioName">Sócio/Contribuinte</Label>
                             <Select value={selectedSocioId} onValueChange={setSelectedSocioId}>
@@ -371,20 +372,20 @@ export default function RciCalculator() {
                                 </SelectContent>
                             </Select>
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="proLaboreValue">Pró-labore (R$)</Label>
-                                <MoneyInput id="proLaboreValue" value={proLaboreValue} onValueChange={setProLaboreValue} />
-                            </div>
-                             <div className="space-y-2">
-                                <Label htmlFor="month">Competência</Label>
-                                <Input id="month" type="month" value={mesCompetencia} onChange={e => setMesCompetencia(e.target.value)} />
-                            </div>
+                         <div className="space-y-2">
+                            <Label htmlFor="month">Competência</Label>
+                            <Input id="month" type="month" value={mesCompetencia} onChange={e => setMesCompetencia(e.target.value)} />
                         </div>
-                    </CardContent>
-                </Card>
+                    </div>
+                     <div className="space-y-2">
+                        <Label htmlFor="proLaboreValue">Valor do Pró-labore (R$)</Label>
+                        <MoneyInput id="proLaboreValue" value={proLaboreValue} onValueChange={setProLaboreValue} />
+                    </div>
+                </CardContent>
+            </Card>
 
-                 <Card>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2"><ArrowUpCircle className="h-5 w-5 text-emerald-500" /> 2. Proventos Manuais</CardTitle>
                     </CardHeader>
@@ -399,8 +400,7 @@ export default function RciCalculator() {
                         <Button variant="outline" size="sm" className="w-full" onClick={() => handleAddRubrica('provento')}><Plus className="mr-2 h-4 w-4" />Adicionar Provento</Button>
                     </CardContent>
                 </Card>
-
-                 <Card>
+                <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2"><ArrowDownCircle className="h-5 w-5 text-red-500" /> 3. Descontos Manuais</CardTitle>
                     </CardHeader>
@@ -415,102 +415,99 @@ export default function RciCalculator() {
                         <Button variant="outline" size="sm" className="w-full" onClick={() => handleAddRubrica('desconto')}><Plus className="mr-2 h-4 w-4" />Adicionar Desconto</Button>
                     </CardContent>
                 </Card>
-
             </div>
-            <div className="lg:col-span-2">
-                <Card className="min-h-[420px]">
-                    <CardHeader>
-                        <div className="flex justify-between items-start">
-                            <div>
-                                <CardTitle>4. Demonstrativo de Pagamento</CardTitle>
-                                <CardDescription>Resultado do cálculo do pró-labore.</CardDescription>
-                            </div>
-                             <div className="flex gap-2">
-                                <Button onClick={() => handleCalculate()} disabled={proLaboreValue <= 0 || isLoading}>
-                                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Calculator className="mr-2 h-4 w-4" />}
-                                    {isLoading ? "Recalculando..." : "Calcular"}
-                                </Button>
-                            </div>
+            
+            <Card>
+                <CardHeader>
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <CardTitle>4. Demonstrativo de Pagamento</CardTitle>
+                            <CardDescription>Resultado do cálculo do pró-labore.</CardDescription>
                         </div>
-                    </CardHeader>
-                    <CardContent>
-                        {calculation ? (
-                            <div>
-                                <div className='flex justify-between items-center mb-4 p-4 bg-muted/50 rounded-lg'>
-                                    <div>
-                                        <p className='font-bold text-lg'>{selectedSocio?.nome || 'Contribuinte'}</p>
-                                        <p className='text-sm text-muted-foreground'>Recibo de Pagamento de Contribuinte Individual</p>
-                                    </div>
-                                    <div className='text-right'>
-                                         <Badge variant="outline">Pró-labore</Badge>
-                                    </div>
+                        <div className="flex gap-2">
+                            <Button onClick={() => handleCalculate()} disabled={proLaboreValue <= 0 || isLoading}>
+                                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Calculator className="mr-2 h-4 w-4" />}
+                                {isLoading ? "Recalculando..." : "Calcular"}
+                            </Button>
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent>
+                    {calculation ? (
+                        <div>
+                            <div className='flex justify-between items-center mb-4 p-4 bg-muted/50 rounded-lg'>
+                                <div>
+                                    <p className='font-bold text-lg'>{selectedSocio?.nome || 'Contribuinte'}</p>
+                                    <p className='text-sm text-muted-foreground'>Recibo de Pagamento de Contribuinte Individual</p>
                                 </div>
-                               
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Descrição</TableHead>
-                                            <TableHead className="text-right">Proventos</TableHead>
-                                            <TableHead className="text-right">Descontos</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {calculation.proventos.map(item => (
-                                            <TableRow key={`p-${item.id}`}>
-                                                <TableCell className="font-medium">{item.label}</TableCell>
-                                                <TableCell className="text-right font-mono text-emerald-600">{item.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                                                <TableCell></TableCell>
-                                            </TableRow>
-                                        ))}
-                                        {calculation.descontos.map(item => (
-                                            <TableRow key={`d-${item.id}`}>
-                                                <TableCell className="font-medium">{item.label}</TableCell>
-                                                <TableCell></TableCell>
-                                                <TableCell className="text-right font-mono text-red-600">{item.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                    <TableFooter>
-                                         <TableRow className="font-bold">
-                                            <TableCell>Totais</TableCell>
-                                            <TableCell className="text-right font-mono text-emerald-600">{calculation.totalProventos.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                                            <TableCell className="text-right font-mono text-red-600">{calculation.totalDescontos.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                                        </TableRow>
-                                    </TableFooter>
-                                </Table>
-
-                                 <div className='mt-6 flex justify-between items-center font-bold text-lg p-4 bg-muted rounded-lg'>
-                                    <span>Valor Líquido a Receber</span>
-                                    <span className="font-mono text-xl">{calculation.liquido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-                                 </div>
-
-                                  <div className="mt-4 grid grid-cols-2 gap-4 text-xs text-muted-foreground">
-                                    <p>Base de Cálculo INSS: <span className='font-mono'>{calculation.baseInss.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></p>
-                                    <p>Base de Cálculo IRRF: <span className='font-mono'>{calculation.baseIrrf.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></p>
-                                  </div>
-
+                                <div className='text-right'>
+                                        <Badge variant="outline">Pró-labore</Badge>
+                                </div>
                             </div>
-                        ) : (
-                             <div className="flex flex-col items-center justify-center text-center p-8 text-muted-foreground min-h-[250px]">
-                                <Calculator className="h-12 w-12 mb-4" />
-                                <p className="font-medium">Preencha os dados e clique em "Calcular"</p>
-                                <p className="text-sm">O resultado do cálculo aparecerá aqui.</p>
-                            </div>
-                        )}
-                    </CardContent>
-                    {calculation && (
-                        <CardFooter className="justify-end gap-2 border-t pt-6 mt-4">
-                             <Button variant="outline" onClick={handleSaveCalculation} disabled={!calculation}>
-                                <Save className="mr-2 h-4 w-4" /> Salvar Cálculo
-                             </Button>
-                             <Button variant="outline" onClick={handleSavePdf} disabled={!calculation}>
-                                <FileDown className="mr-2 h-4 w-4" /> Salvar PDF
-                             </Button>
-                        </CardFooter>
+                            
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Descrição</TableHead>
+                                        <TableHead className="text-right">Proventos</TableHead>
+                                        <TableHead className="text-right">Descontos</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {calculation.proventos.map(item => (
+                                        <TableRow key={`p-${item.id}`}>
+                                            <TableCell className="font-medium">{item.label}</TableCell>
+                                            <TableCell className="text-right font-mono text-emerald-600">{item.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                            <TableCell></TableCell>
+                                        </TableRow>
+                                    ))}
+                                    {calculation.descontos.map(item => (
+                                        <TableRow key={`d-${item.id}`}>
+                                            <TableCell className="font-medium">{item.label}</TableCell>
+                                            <TableCell></TableCell>
+                                            <TableCell className="text-right font-mono text-red-600">{item.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                                <TableFooter>
+                                        <TableRow className="font-bold">
+                                        <TableCell>Totais</TableCell>
+                                        <TableCell className="text-right font-mono text-emerald-600">{calculation.totalProventos.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                        <TableCell className="text-right font-mono text-red-600">{calculation.totalDescontos.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                    </TableRow>
+                                </TableFooter>
+                            </Table>
+
+                                <div className='mt-6 flex justify-between items-center font-bold text-lg p-4 bg-muted rounded-lg'>
+                                <span>Valor Líquido a Receber</span>
+                                <span className="font-mono text-xl">{calculation.liquido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                                </div>
+
+                                <div className="mt-4 grid grid-cols-2 gap-4 text-xs text-muted-foreground">
+                                <p>Base de Cálculo INSS: <span className='font-mono'>{calculation.baseInss.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></p>
+                                <p>Base de Cálculo IRRF: <span className='font-mono'>{calculation.baseIrrf.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></p>
+                                </div>
+
+                        </div>
+                    ) : (
+                            <div className="flex flex-col items-center justify-center text-center p-8 text-muted-foreground min-h-[250px]">
+                            <Calculator className="h-12 w-12 mb-4" />
+                            <p className="font-medium">Preencha os dados e clique em "Calcular"</p>
+                            <p className="text-sm">O resultado do cálculo aparecerá aqui.</p>
+                        </div>
                     )}
-                </Card>
-            </div>
+                </CardContent>
+                {calculation && (
+                    <CardFooter className="justify-end gap-2 border-t pt-6 mt-4">
+                            <Button variant="outline" onClick={handleSaveCalculation} disabled={!calculation}>
+                            <Save className="mr-2 h-4 w-4" /> Salvar Cálculo
+                            </Button>
+                            <Button variant="outline" onClick={handleSavePdf} disabled={!calculation}>
+                            <FileDown className="mr-2 h-4 w-4" /> Salvar PDF
+                            </Button>
+                    </CardFooter>
+                )}
+            </Card>
         </div>
     );
 }
-
