@@ -5,10 +5,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Calculator, Loader2 } from 'lucide-react';
-import { Table, TableBody, TableCell, TableRow, TableFooter } from '@/components/ui/table';
+import { Calculator, Loader2, ArrowDownCircle, ArrowUpCircle, ArrowRight } from 'lucide-react';
+import { Table, TableBody, TableCell, TableRow, TableFooter, TableHead, TableHeader } from '@/components/ui/table';
 import { Separator } from '@/components/ui/separator';
 import { MoneyInput } from '@/components/ui/money-input';
+import { Badge } from '@/components/ui/badge';
 
 // Simplified tax brackets for demonstration
 const inssRate = 0.11;
@@ -143,61 +144,59 @@ export default function RciCalculator() {
                     <CardContent>
                         {calculation ? (
                             <div>
-                                <div className='flex justify-between items-center mb-4'>
+                                <div className='flex justify-between items-center mb-4 p-4 bg-muted/50 rounded-lg'>
                                     <div>
                                         <p className='font-bold text-lg'>{socioName || 'Contribuinte'}</p>
+                                        <p className='text-sm text-muted-foreground'>Recibo de Pagamento de Contribuinte Individual</p>
+                                    </div>
+                                    <div className='text-right'>
+                                         <Badge variant="outline">Pró-labore</Badge>
                                     </div>
                                 </div>
-                                <Separator />
-                                <div className="grid grid-cols-2 gap-8 mt-4">
-                                    <div>
-                                        <h4 className="font-semibold mb-2 text-emerald-600">Proventos</h4>
-                                        <Table>
-                                             <TableBody>
-                                                {calculation.proventos.map(item => (
-                                                    <TableRow key={item.label}>
-                                                        <TableCell>{item.label}</TableCell>
-                                                        <TableCell className="text-right font-mono">{item.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                                                    </TableRow>
-                                                ))}
-                                            </TableBody>
-                                            <TableFooter>
-                                                <TableRow className="font-bold">
-                                                    <TableCell>Total Proventos</TableCell>
-                                                    <TableCell className="text-right font-mono">{calculation.totalProventos.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                                                </TableRow>
-                                            </TableFooter>
-                                        </Table>
-                                    </div>
-                                     <div>
-                                        <h4 className="font-semibold mb-2 text-red-600">Descontos</h4>
-                                         <Table>
-                                             <TableBody>
-                                                {calculation.descontos.map(item => (
-                                                    <TableRow key={item.label}>
-                                                        <TableCell>{item.label}</TableCell>
-                                                        <TableCell className="text-right font-mono">{item.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                                                    </TableRow>
-                                                ))}
-                                            </TableBody>
-                                             <TableFooter>
-                                                <TableRow className="font-bold">
-                                                    <TableCell>Total Descontos</TableCell>
-                                                    <TableCell className="text-right font-mono">{calculation.totalDescontos.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                                                </TableRow>
-                                            </TableFooter>
-                                        </Table>
-                                    </div>
-                                </div>
-                                 <Separator className='my-4' />
-                                 <div className='flex justify-between items-center font-bold text-lg p-4 bg-muted rounded-lg'>
-                                    <span>Valor Líquido</span>
-                                    <span className="font-mono">{calculation.liquido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                               
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Descrição</TableHead>
+                                            <TableHead className="text-right">Proventos</TableHead>
+                                            <TableHead className="text-right">Descontos</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {calculation.proventos.map(item => (
+                                            <TableRow key={item.label}>
+                                                <TableCell className="font-medium">{item.label}</TableCell>
+                                                <TableCell className="text-right font-mono text-emerald-600">{item.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                                <TableCell></TableCell>
+                                            </TableRow>
+                                        ))}
+                                        {calculation.descontos.map(item => (
+                                            <TableRow key={item.label}>
+                                                <TableCell className="font-medium">{item.label}</TableCell>
+                                                <TableCell></TableCell>
+                                                <TableCell className="text-right font-mono text-red-600">{item.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                    <TableFooter>
+                                         <TableRow className="font-bold">
+                                            <TableCell>Totais</TableCell>
+                                            <TableCell className="text-right font-mono text-emerald-600">{calculation.totalProventos.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                            <TableCell className="text-right font-mono text-red-600">{calculation.totalDescontos.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                        </TableRow>
+                                    </TableFooter>
+                                </Table>
+
+                                 <div className='mt-6 flex justify-between items-center font-bold text-lg p-4 bg-muted rounded-lg'>
+                                    <span>Valor Líquido a Receber</span>
+                                    <span className="font-mono text-xl">{calculation.liquido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
                                  </div>
+
                                   <div className="mt-4 grid grid-cols-2 gap-4 text-xs text-muted-foreground">
-                                    <p>Base INSS: <span className='font-mono'>{calculation.baseInss.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></p>
-                                    <p>Base IRRF: <span className='font-mono'>{calculation.baseIrrf.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></p>
+                                    <p>Base de Cálculo INSS: <span className='font-mono'>{calculation.baseInss.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></p>
+                                    <p>Base de Cálculo IRRF: <span className='font-mono'>{calculation.baseIrrf.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></p>
                                   </div>
+
                             </div>
                         ) : (
                              <div className="flex flex-col items-center justify-center text-center p-8 text-muted-foreground min-h-[250px]">
@@ -207,6 +206,14 @@ export default function RciCalculator() {
                             </div>
                         )}
                     </CardContent>
+                    {calculation && (
+                        <CardFooter className="justify-end gap-2 border-t pt-6 mt-4">
+                             <Button variant="outline">Salvar PDF</Button>
+                             <Button>
+                                Finalizar e Contabilizar <ArrowRight className="ml-2 h-4 w-4" />
+                            </Button>
+                        </CardFooter>
+                    )}
                 </Card>
             </div>
         </div>
