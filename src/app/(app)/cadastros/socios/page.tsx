@@ -1,3 +1,4 @@
+
 'use client';
 import { useState, useMemo, useEffect } from 'react';
 import { MoreHorizontal, Plus, Search, Trash2, Pencil, ArrowLeft, Loader2, Percent } from 'lucide-react';
@@ -123,7 +124,7 @@ export default function SociosPage() {
                                         <TableCell className="font-medium">{item.nome}</TableCell>
                                         <TableCell>{item.cpf}</TableCell>
                                         <TableCell>{format(new Date(item.dataEntrada), 'dd/MM/yyyy')}</TableCell>
-                                        <TableCell className="text-right font-mono">{item.proLabore.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
+                                        <TableCell className="text-right font-mono">{(item.proLabore || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
                                         <TableCell className="text-right font-mono">{item.participacao}%</TableCell>
                                         <TableCell>
                                             <DropdownMenu>
