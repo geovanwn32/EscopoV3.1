@@ -181,6 +181,7 @@ function ItemForm({ onSave, onOpenChange, item }: ItemFormProps) {
     const [formData, setFormData] = useState<Omit<Socio, 'id'>>({
         nome: '',
         cpf: '',
+        nit: '',
         dataEntrada: '',
         proLabore: 0,
         participacao: 0,
@@ -196,6 +197,7 @@ function ItemForm({ onSave, onOpenChange, item }: ItemFormProps) {
             setFormData({
                 nome: item.nome || '',
                 cpf: item.cpf || '',
+                nit: item.nit || '',
                 dataEntrada: item.dataEntrada || '',
                 proLabore: item.proLabore || 0,
                 participacao: item.participacao || 0,
@@ -207,7 +209,7 @@ function ItemForm({ onSave, onOpenChange, item }: ItemFormProps) {
             });
         } else {
             setFormData({
-                nome: '', cpf: '', dataEntrada: '', proLabore: 0, participacao: 0, dataNascimento: '', genero: 'Outro',
+                nome: '', cpf: '', nit: '', dataEntrada: '', proLabore: 0, participacao: 0, dataNascimento: '', genero: 'Outro',
                 endereco: { cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', uf: '' },
                 contato: { telefone: '', email: '' }, dadosBancarios: { banco: '', agencia: '', conta: '' },
             });
@@ -328,6 +330,10 @@ function ItemForm({ onSave, onOpenChange, item }: ItemFormProps) {
                                     </SelectContent>
                                 </Select>
                             </div>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="nit">NIT/PIS</Label>
+                            <Input id="nit" value={formData.nit} onChange={(e) => handleInputChange('nit', e.target.value)} />
                         </div>
                     </TabsContent>
                     

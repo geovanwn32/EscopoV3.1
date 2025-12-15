@@ -2,6 +2,7 @@ export interface Socio {
     id: number;
     nome: string;
     cpf: string;
+    nit?: string; // NIT/PIS/PASEP
     dataEntrada: string; // ISO string
     proLabore: number;
     participacao: number; // Percentage

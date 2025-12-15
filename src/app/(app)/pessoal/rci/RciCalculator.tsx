@@ -246,14 +246,20 @@ export default function RciCalculator() {
             doc.text(`Competência: ${competenciaFormatted}`, pageWidth - margin, startY + 8, { align: 'right' });
             
             // Company and Partner Info
+            let body = [
+                [{ content: 'Empresa Pagadora', styles: { fontStyle: 'bold' } }, `${activeCompany.data?.razaoSocial || activeCompany.name}`],
+                [{ content: 'CNPJ', styles: { fontStyle: 'bold' } }, `${activeCompany.data?.cnpj || ''}`],
+                [{ content: 'Sócio / Beneficiário', styles: { fontStyle: 'bold' } }, `${selectedSocio.nome}`],
+                [{ content: 'CPF', styles: { fontStyle: 'bold' } }, `${selectedSocio.cpf}`]
+            ];
+
+            if(selectedSocio.nit) {
+                body.push([{ content: 'NIT/PIS', styles: { fontStyle: 'bold' } }, `${selectedSocio.nit}`]);
+            }
+
             autoTable(doc, {
                 startY: startY + 12,
-                body: [
-                    [{ content: 'Empresa Pagadora', styles: { fontStyle: 'bold' } }, `${activeCompany.data?.razaoSocial || activeCompany.name}`],
-                    [{ content: 'CNPJ', styles: { fontStyle: 'bold' } }, `${activeCompany.data?.cnpj || ''}`],
-                    [{ content: 'Sócio / Beneficiário', styles: { fontStyle: 'bold' } }, `${selectedSocio.nome}`],
-                    [{ content: 'CPF', styles: { fontStyle: 'bold' } }, `${selectedSocio.cpf}`],
-                ],
+                body: body,
                 theme: 'striped',
                 styles: { fontSize: 9, cellPadding: 1.5 },
                 columnStyles: { 0: { cellWidth: 40 } },
