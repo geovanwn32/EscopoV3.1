@@ -311,19 +311,16 @@ export default function RciCalculator() {
             });
             finalY = (doc as any).lastAutoTable.finalY;
 
-            const totalsBody = [
-                [
-                    { content: 'Totais', colSpan: 1, styles: { fontStyle: 'bold' } },
-                    { content: formatCurrencyNoSymbol(calculation.totalProventos), styles: { halign: 'right', fontStyle: 'bold', textColor: [22, 163, 74] } },
-                    { content: formatCurrencyNoSymbol(calculation.totalDescontos), styles: { halign: 'right', fontStyle: 'bold', textColor: [220, 38, 38] } }
-                ]
-            ];
              autoTable(doc, {
                 startY: finalY,
-                body: totalsBody,
+                body: [['Totais', formatCurrencyNoSymbol(calculation.totalProventos), formatCurrencyNoSymbol(calculation.totalDescontos)]],
                 theme: 'grid',
-                styles: { fontSize: 9, cellPadding: 2 },
-                columnStyles: { 0: {cellWidth: 106.8} }
+                styles: { fontSize: 9, cellPadding: 2, fontStyle: 'bold' },
+                columnStyles: {
+                    0: { cellWidth: 106.8 }, // 'Código' + 'Descrição' widths
+                    1: { halign: 'right', textColor: [22, 163, 74] },
+                    2: { halign: 'right', textColor: [220, 38, 38] },
+                }
              });
 
             finalY = (doc as any).lastAutoTable.finalY;
