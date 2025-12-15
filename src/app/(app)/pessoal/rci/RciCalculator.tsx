@@ -163,7 +163,7 @@ export default function RciCalculator() {
                 }
             }
             
-            const irrf = Math.max(0, Math.min(irrfFromStandardDeduction, irrfFromSimplifiedDeduction));
+            const irrf = Math.max(0, parseFloat(Math.min(irrfFromStandardDeduction, irrfFromSimplifiedDeduction).toFixed(2)));
 
             const totalProventos = baseInss;
             const descontosCalculados = [
@@ -223,6 +223,8 @@ export default function RciCalculator() {
     };
     
     const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const formatCurrencyNoSymbol = (value: number) => value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 
     const handleSavePdf = () => {
         if (!calculation || !selectedSocio || !activeCompany) return;
@@ -237,45 +239,62 @@ export default function RciCalculator() {
         const competenciaFormatted = competenciaDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
         const drawReceipt = (startY: number, title: string) => {
+            const companyLogo = activeCompany.data?.logo;
+            if (companyLogo) {
+                try {
+                    doc.addImage(companyLogo, 'PNG', margin, startY, 40, 15);
+                } catch(e) {
+                    console.error("Error adding logo to PDF:", e);
+                }
+            }
+
             doc.setFontSize(16);
             doc.setFont('helvetica', 'bold');
-            doc.text("Recibo de Pagamento - Pró-labore", pageWidth / 2, startY, { align: 'center' });
+            doc.text("Recibo de Pagamento - Pró-labore", pageWidth / 2, startY + (companyLogo ? 25 : 8), { align: 'center' });
             
             doc.setFontSize(10);
             doc.setFont('helvetica', 'normal');
-            doc.text(`Competência: ${competenciaFormatted}`, pageWidth - margin, startY + 8, { align: 'right' });
+            doc.text(`Competência: ${competenciaFormatted}`, pageWidth - margin, startY + (companyLogo ? 10 : 8), { align: 'right' });
             
-            let body = [
-                [{ content: 'Empresa Pagadora', styles: { fontStyle: 'bold' } }, `${activeCompany.data?.razaoSocial || activeCompany.name}`],
-                [{ content: 'CNPJ', styles: { fontStyle: 'bold' } }, `${activeCompany.data?.cnpj || ''}`],
-                [{ content: 'Sócio / Beneficiário', styles: { fontStyle: 'bold' } }, `${selectedSocio.nome}`],
-                [{ content: 'CPF', styles: { fontStyle: 'bold' } }, `${selectedSocio.cpf}`]
+            let finalY = startY + (companyLogo ? 32 : 12);
+            
+            const companyInfo = [
+                { title: 'Empresa Pagadora:', value: activeCompany.data?.razaoSocial || activeCompany.name },
+                { title: 'CNPJ:', value: activeCompany.data?.cnpj || '' }
             ];
-
-            if(selectedSocio.nit) {
-                body.push([{ content: 'NIT/PIS', styles: { fontStyle: 'bold' } }, `${selectedSocio.nit}`]);
-            }
-
-            autoTable(doc, {
-                startY: startY + 12,
-                body: body,
-                theme: 'striped',
-                styles: { fontSize: 9, cellPadding: 1.5 },
-                columnStyles: { 0: { cellWidth: 40 } },
+             autoTable(doc, {
+                startY: finalY,
+                body: companyInfo.map(i => [i.title, i.value]),
+                theme: 'plain',
+                styles: { fontSize: 9, cellPadding: 1 },
+                columnStyles: { 0: { fontStyle: 'bold', cellWidth: 40 } },
             });
+            finalY = (doc as any).lastAutoTable.finalY;
 
-            let finalY = (doc as any).lastAutoTable.finalY + 5;
+            const socioInfo = [
+                { title: 'Sócio / Beneficiário:', value: selectedSocio.nome },
+                { title: 'CPF:', value: selectedSocio.cpf },
+                { title: 'NIT/PIS:', value: selectedSocio.nit || 'Não informado' }
+            ];
+            autoTable(doc, {
+                startY: finalY,
+                body: socioInfo.map(i => [i.title, i.value]),
+                theme: 'plain',
+                styles: { fontSize: 9, cellPadding: 1 },
+                columnStyles: { 0: { fontStyle: 'bold', cellWidth: 40 } },
+            });
+            finalY = (doc as any).lastAutoTable.finalY + 5;
 
             autoTable(doc, {
                 startY: finalY,
                 head: [['Código', 'Descrição', 'Proventos', 'Descontos']],
                 body: [
-                    ...calculation.proventos.map((p, i) => [`10${i+1}`, p.label, formatCurrency(p.value), '']),
-                    ...calculation.descontos.map((d, i) => [`20${i+1}`, d.label, '', formatCurrency(d.value)]),
+                    ...calculation.proventos.map((p, i) => [`10${i+1}`, p.label, formatCurrencyNoSymbol(p.value), '']),
+                    ...calculation.descontos.map((d, i) => [`20${i+1}`, d.label, '', formatCurrencyNoSymbol(d.value)]),
                 ],
                 theme: 'grid',
                 styles: { fontSize: 9, cellPadding: 2 },
-                headStyles: { fillColor: [240, 240, 240], textColor: 40 },
+                headStyles: { fillColor: [240, 240, 240], textColor: 40, fontStyle: 'bold' },
                 columnStyles: { 
                     0: { halign: 'center', cellWidth: 20 },
                     2: { halign: 'right' }, 
@@ -290,14 +309,13 @@ export default function RciCalculator() {
                     }
                 }
             });
-
             finalY = (doc as any).lastAutoTable.finalY;
 
             const totalsBody = [
                 [
                     { content: 'Totais', colSpan: 1, styles: { fontStyle: 'bold' } },
-                    { content: formatCurrency(calculation.totalProventos), styles: { halign: 'right', fontStyle: 'bold', textColor: [22, 163, 74] } },
-                    { content: formatCurrency(calculation.totalDescontos), styles: { halign: 'right', fontStyle: 'bold', textColor: [220, 38, 38] } }
+                    { content: formatCurrencyNoSymbol(calculation.totalProventos), styles: { halign: 'right', fontStyle: 'bold', textColor: [22, 163, 74] } },
+                    { content: formatCurrencyNoSymbol(calculation.totalDescontos), styles: { halign: 'right', fontStyle: 'bold', textColor: [220, 38, 38] } }
                 ]
             ];
              autoTable(doc, {
@@ -309,17 +327,18 @@ export default function RciCalculator() {
              });
 
             finalY = (doc as any).lastAutoTable.finalY;
-
-            doc.setFontSize(10);
-            doc.setFont('helvetica', 'bold');
-            doc.text('Valor Líquido a Receber:', margin, finalY + 8);
-            doc.text(formatCurrency(calculation.liquido), pageWidth - margin, finalY + 8, { align: 'right' });
+             autoTable(doc, {
+                startY: finalY,
+                body: [['Valor Líquido a Receber:', { content: formatCurrency(calculation.liquido), styles: { halign: 'right' } }]],
+                theme: 'grid',
+                styles: { fontSize: 10, cellPadding: 2.5, fontStyle: 'bold' },
+            });
+            finalY = (doc as any).lastAutoTable.finalY;
 
             doc.setFontSize(8);
             doc.setFont('helvetica', 'normal');
-            doc.text(`Base INSS: ${formatCurrency(calculation.baseInss)} | Base IRRF: ${formatCurrency(calculation.baseIrrf)}`, margin, finalY + 15);
+            doc.text(`Base INSS: ${formatCurrency(calculation.baseInss)} | Base IRRF: ${formatCurrency(calculation.baseIrrf)}`, margin, finalY + 6);
             
-            // Legal Basis Section
             const legalText = [
                 'Observações / Base Legal:',
                 '- Contribuição Previdenciária (INSS) do contribuinte individual corresponde a 11% do pró-labore, respeitado o teto do RGPS, conforme Lei nº 8.212/91.',
@@ -327,17 +346,17 @@ export default function RciCalculator() {
             ];
             doc.setFontSize(7);
             doc.setTextColor(100);
-            doc.text(legalText, margin, finalY + 22);
+            doc.text(legalText, margin, finalY + 12);
 
-            const signatureY = finalY + 35;
+            const signatureY = finalY + 28;
             doc.line(pageWidth / 2 - 40, signatureY, pageWidth / 2 + 40, signatureY);
             doc.setFontSize(8);
             doc.setTextColor(0);
-            doc.text('Assinatura do Sócio', pageWidth / 2, signatureY + 4, { align: 'center' });
+            doc.text(selectedSocio.nome, pageWidth / 2, signatureY + 4, { align: 'center' });
             
             doc.setFontSize(8);
             doc.setFont('helvetica', 'italic');
-            doc.text(title, pageWidth - margin, finalY + 40, { align: 'right'});
+            doc.text(title, pageWidth - margin, finalY + 35, { align: 'right'});
         };
 
         drawReceipt(20, 'Via da Empresa');
@@ -381,7 +400,7 @@ export default function RciCalculator() {
             <div className="max-w-4xl mx-auto space-y-6">
                 <Card>
                     <CardHeader>
-                        <CardTitle>1. Dados para Cálculo do RCI</CardTitle>
+                        <CardTitle>1. Dados para Cálculo</CardTitle>
                         <CardDescription>Preencha os dados do sócio e o valor do pró-labore.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
@@ -495,7 +514,7 @@ export default function RciCalculator() {
                                         {calculation.proventos.map(item => (
                                             <TableRow key={`p-${item.id}`}>
                                                 <TableCell className="font-medium">{item.label}</TableCell>
-                                                <TableCell className="text-right font-mono text-emerald-600">{item.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                                <TableCell className="text-right font-mono text-emerald-600">{formatCurrencyNoSymbol(item.value)}</TableCell>
                                                 <TableCell></TableCell>
                                             </TableRow>
                                         ))}
@@ -503,27 +522,27 @@ export default function RciCalculator() {
                                             <TableRow key={`d-${item.id}`}>
                                                 <TableCell className="font-medium">{item.label}</TableCell>
                                                 <TableCell></TableCell>
-                                                <TableCell className="text-right font-mono text-red-600">{item.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                                <TableCell className="text-right font-mono text-red-600">{formatCurrencyNoSymbol(item.value)}</TableCell>
                                             </TableRow>
                                         ))}
                                     </TableBody>
                                     <TableFooter>
                                             <TableRow className="font-bold">
                                             <TableCell>Totais</TableCell>
-                                            <TableCell className="text-right font-mono text-emerald-600">{calculation.totalProventos.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                                            <TableCell className="text-right font-mono text-red-600">{calculation.totalDescontos.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                            <TableCell className="text-right font-mono text-emerald-600">{formatCurrencyNoSymbol(calculation.totalProventos)}</TableCell>
+                                            <TableCell className="text-right font-mono text-red-600">{formatCurrencyNoSymbol(calculation.totalDescontos)}</TableCell>
                                         </TableRow>
                                     </TableFooter>
                                 </Table>
 
                                     <div className='mt-6 flex justify-between items-center font-bold text-lg p-4 bg-muted rounded-lg'>
                                     <span>Valor Líquido a Receber</span>
-                                    <span className="font-mono text-xl">{calculation.liquido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                                    <span className="font-mono text-xl">{formatCurrency(calculation.liquido)}</span>
                                     </div>
 
                                     <div className="mt-4 grid grid-cols-2 gap-4 text-xs text-muted-foreground">
-                                    <p>Base de Cálculo INSS: <span className='font-mono'>{calculation.baseInss.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></p>
-                                    <p>Base de Cálculo IRRF: <span className='font-mono'>{calculation.baseIrrf.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span></p>
+                                    <p>Base de Cálculo INSS: <span className='font-mono'>{formatCurrency(calculation.baseInss)}</span></p>
+                                    <p>Base de Cálculo IRRF: <span className='font-mono'>{formatCurrency(calculation.baseIrrf)}</span></p>
                                     </div>
 
                             </div>
