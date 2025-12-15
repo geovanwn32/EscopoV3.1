@@ -1,6 +1,6 @@
 
 'use client';
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +10,9 @@ import { Table, TableBody, TableCell, TableRow, TableFooter, TableHead, TableHea
 import { Separator } from '@/components/ui/separator';
 import { MoneyInput } from '@/components/ui/money-input';
 import { Badge } from '@/components/ui/badge';
+import { useCompany } from '@/hooks/use-company';
+import { Socio } from '@/types/socios';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 // Simplified tax brackets for demonstration
 const inssRate = 0.11;
@@ -36,10 +39,25 @@ interface CalculationResult {
 }
 
 export default function RciCalculator() {
-    const [socioName, setSocioName] = useState<string>('');
+    const { useScopedData } = useCompany();
+    const [socios] = useScopedData<Socio[]>('cadastros-socios', []);
+    const [selectedSocioId, setSelectedSocioId] = useState<string>('');
     const [proLaboreValue, setProLaboreValue] = useState<number>(0);
     const [isLoading, setIsLoading] = useState(false);
     const [calculation, setCalculation] = useState<CalculationResult | null>(null);
+
+    const selectedSocio = useMemo(() => {
+        return socios.find(s => s.id.toString() === selectedSocioId);
+    }, [selectedSocioId, socios]);
+
+    useEffect(() => {
+        if (selectedSocio) {
+            setProLaboreValue(selectedSocio.proLabore || 0);
+        } else {
+            setProLaboreValue(0);
+        }
+        setCalculation(null);
+    }, [selectedSocio]);
 
     const handleCalculate = () => {
         if (proLaboreValue <= 0) {
@@ -119,8 +137,21 @@ export default function RciCalculator() {
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div className="space-y-2">
-                            <Label htmlFor="socioName">Nome do Sócio/Contribuinte</Label>
-                            <Input id="socioName" value={socioName} onChange={e => setSocioName(e.target.value)} placeholder="Nome completo" />
+                            <Label htmlFor="socioName">Sócio/Contribuinte</Label>
+                            <Select value={selectedSocioId} onValueChange={setSelectedSocioId}>
+                                <SelectTrigger id="socioName">
+                                    <SelectValue placeholder="Selecione um sócio..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {socios.length > 0 ? (
+                                        socios.map(socio => (
+                                            <SelectItem key={socio.id} value={socio.id.toString()}>{socio.nome}</SelectItem>
+                                        ))
+                                    ) : (
+                                        <div className="p-4 text-sm text-muted-foreground">Nenhum sócio cadastrado.</div>
+                                    )}
+                                </SelectContent>
+                            </Select>
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="proLaboreValue">Valor do Pró-labore (R$)</Label>
@@ -146,7 +177,7 @@ export default function RciCalculator() {
                             <div>
                                 <div className='flex justify-between items-center mb-4 p-4 bg-muted/50 rounded-lg'>
                                     <div>
-                                        <p className='font-bold text-lg'>{socioName || 'Contribuinte'}</p>
+                                        <p className='font-bold text-lg'>{selectedSocio?.nome || 'Contribuinte'}</p>
                                         <p className='text-sm text-muted-foreground'>Recibo de Pagamento de Contribuinte Individual</p>
                                     </div>
                                     <div className='text-right'>
