@@ -32,6 +32,13 @@ const cadastroItens = [
         description: 'Gerencie os dados dos seus colaboradores.',
         color: "text-red-600 bg-red-100/80 group-hover:bg-red-600 dark:bg-red-900/40 dark:text-red-400 dark:group-hover:bg-red-500",
     },
+    {
+        href: '/cadastros/socios',
+        icon: <Users className="h-8 w-8" />,
+        label: 'Sócios',
+        description: 'Gerencie os dados dos sócios da empresa.',
+        color: "text-purple-600 bg-purple-100/80 group-hover:bg-purple-600 dark:bg-purple-900/40 dark:text-purple-400 dark:group-hover:bg-purple-500",
+    },
      {
         href: '/cadastros/usuarios',
         icon: <Users className="h-8 w-8" />,

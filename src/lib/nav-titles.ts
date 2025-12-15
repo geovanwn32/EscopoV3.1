@@ -26,7 +26,7 @@ export const NAV_TITLES: Record<string, string> = {
   '/cadastros': 'Cadastros',
   '/cadastros/parceiros': 'Parceiros',
   '/cadastros/funcionarios': 'Funcionários',
-  '/cadastros/socios': 'Sócios',
+  '/cadastros/socios': 'Cadastro de Sócios',
   '/cadastros/produtos': 'Produtos',
   '/cadastros/servicos': 'Serviços',
   '/cadastros/aliquotas': 'Alíquotas',
