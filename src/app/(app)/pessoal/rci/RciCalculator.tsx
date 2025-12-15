@@ -1,5 +1,4 @@
 
-
 'use client';
 import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -313,19 +312,20 @@ export default function RciCalculator() {
             });
             finalY = (doc as any).lastAutoTable.finalY;
 
-            const table = (doc as any).lastAutoTable.doc.previous;
-            const colWidths = table.columns.map((col: any) => col.width);
-
             autoTable(doc, {
                 startY: finalY,
-                body: [['Totais', formatCurrencyNoSymbol(calculation.totalProventos), formatCurrencyNoSymbol(calculation.totalDescontos)]],
+                body: [
+                    [
+                        { content: 'Totais', colSpan: 2, styles: { halign: 'left', fontStyle: 'bold' } },
+                        { content: formatCurrencyNoSymbol(calculation.totalProventos), styles: { halign: 'right', fontStyle: 'bold', textColor: [22, 163, 74] } },
+                        { content: formatCurrencyNoSymbol(calculation.totalDescontos), styles: { halign: 'right', fontStyle: 'bold', textColor: [220, 38, 38] } },
+                    ]
+                ],
                 theme: 'grid',
-                styles: { fontSize: 9, cellPadding: 2, fontStyle: 'bold' },
+                styles: { fontSize: 9, cellPadding: 2 },
                 columnStyles: {
-                    0: { halign: 'left', cellWidth: colWidths[0] + colWidths[1] },
-                    1: { halign: 'right', cellWidth: colWidths[2], textColor: [22, 163, 74] },
-                    2: { halign: 'right', cellWidth: colWidths[3], textColor: [220, 38, 38] },
-                }
+                    0: { cellWidth: 20 } 
+                },
             });
             finalY = (doc as any).lastAutoTable.finalY;
 
