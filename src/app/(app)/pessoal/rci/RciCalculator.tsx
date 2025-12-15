@@ -323,8 +323,11 @@ export default function RciCalculator() {
                 ],
                 theme: 'grid',
                 styles: { fontSize: 9, cellPadding: 2 },
-                columnStyles: {
-                    0: { cellWidth: 20 } 
+                 columnStyles: {
+                    0: { cellWidth: 'auto' }, // Let Description take remaining space
+                    1: { cellWidth: 'auto' },
+                    2: { halign: 'right' },
+                    3: { halign: 'right' }
                 },
             });
             finalY = (doc as any).lastAutoTable.finalY;
