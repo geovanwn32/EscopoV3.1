@@ -13,6 +13,8 @@ import { Badge } from '@/components/ui/badge';
 import { useCompany } from '@/hooks/use-company';
 import { Socio } from '@/types/socios';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 // Simplified tax brackets for demonstration
 const inssRate = 0.11;
@@ -39,12 +41,14 @@ interface CalculationResult {
 }
 
 export default function RciCalculator() {
-    const { useScopedData } = useCompany();
+    const { useScopedData, companies, currentCompany } = useCompany();
     const [socios] = useScopedData<Socio[]>('cadastros-socios', []);
     const [selectedSocioId, setSelectedSocioId] = useState<string>('');
     const [proLaboreValue, setProLaboreValue] = useState<number>(0);
     const [isLoading, setIsLoading] = useState(false);
     const [calculation, setCalculation] = useState<CalculationResult | null>(null);
+
+    const activeCompany = useMemo(() => companies.find(c => c.id === currentCompany), [companies, currentCompany]);
 
     const selectedSocio = useMemo(() => {
         return socios.find(s => s.id.toString() === selectedSocioId);
@@ -126,6 +130,78 @@ export default function RciCalculator() {
             setIsLoading(false);
         }, 1000);
     }
+
+    const handleSavePdf = () => {
+        if (!calculation || !selectedSocio || !activeCompany) return;
+
+        const doc = new jsPDF();
+        
+        // Header
+        doc.setFontSize(18);
+        doc.text("Demonstrativo de Pagamento - Pró-labore", 14, 22);
+        doc.setFontSize(11);
+        doc.text(`Competência: ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`, 14, 30);
+        
+        // Company and Employee Info
+        autoTable(doc, {
+            startY: 35,
+            body: [
+                ['Empresa', `${activeCompany.name} - CNPJ: ${activeCompany.data?.cnpj || ''}`],
+                ['Sócio', `${selectedSocio.nome} - CPF: ${selectedSocio.cpf}`],
+            ],
+            theme: 'striped',
+            styles: { fontSize: 10, cellPadding: 2 },
+            headStyles: { fillColor: [22, 163, 74] },
+        });
+
+        const tableStartY = (doc as any).lastAutoTable.finalY + 10;
+        
+        // Earnings and Deductions Tables
+        autoTable(doc, {
+            startY: tableStartY,
+            head: [['Descrição', 'Proventos (R$)', 'Descontos (R$)']],
+            body: [
+                ...calculation.proventos.map(p => [p.label, p.value.toFixed(2), '']),
+                ...calculation.descontos.map(d => [d.label, '', d.value.toFixed(2)]),
+            ],
+            theme: 'grid',
+            foot: [
+                [{ content: 'Totais', styles: { fontStyle: 'bold' } }, 
+                 { content: calculation.totalProventos.toFixed(2), styles: { halign: 'right', fontStyle: 'bold' } }, 
+                 { content: calculation.totalDescontos.toFixed(2), styles: { halign: 'right', fontStyle: 'bold' } }]
+            ],
+            didParseCell: (data) => {
+                if (data.section === 'body' && data.column.index === 1 && data.cell.text[0]) {
+                     data.cell.styles.textColor = [16, 185, 129]; // Emerald
+                }
+                if (data.section === 'body' && data.column.index === 2 && data.cell.text[0]) {
+                     data.cell.styles.textColor = [220, 38, 38]; // Red
+                }
+            }
+        });
+
+        const secondTableY = (doc as any).lastAutoTable.finalY;
+
+        // Totals
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Valor Líquido a Receber:', 14, secondTableY + 15);
+        doc.text(calculation.liquido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), 200, secondTableY + 15, { align: 'right' });
+
+        // Calculation Bases
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Bases de Cálculo:', 14, secondTableY + 25);
+        doc.text(`Base INSS: ${calculation.baseInss.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`, 14, secondTableY + 30);
+        doc.text(`Base IRRF: ${calculation.baseIrrf.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`, 14, secondTableY + 35);
+        
+        // Footer
+        const finalY = doc.internal.pageSize.height - 30;
+        doc.line(14, finalY, 196, finalY);
+        doc.text('Assinatura do Sócio', 105, finalY + 7, { align: 'center' });
+
+        doc.save(`RCI_${selectedSocio.nome.replace(' ', '_')}_${new Date().toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' })}.pdf`);
+    };
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -239,7 +315,7 @@ export default function RciCalculator() {
                     </CardContent>
                     {calculation && (
                         <CardFooter className="justify-end gap-2 border-t pt-6 mt-4">
-                             <Button variant="outline">Salvar PDF</Button>
+                             <Button variant="outline" onClick={handleSavePdf} disabled={!calculation}>Salvar PDF</Button>
                              <Button>
                                 Finalizar e Contabilizar <ArrowRight className="ml-2 h-4 w-4" />
                             </Button>
