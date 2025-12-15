@@ -387,8 +387,8 @@ export default function RciCalculator() {
     };
 
     return (
-        <div className="space-y-6">
-            <div className="max-w-4xl mx-auto space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="lg:col-span-1 space-y-6">
                 <Card>
                     <CardHeader>
                         <CardTitle>1. Dados para Cálculo</CardTitle>
@@ -432,51 +432,49 @@ export default function RciCalculator() {
                     </CardContent>
                 </Card>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2"><ArrowUpCircle className="h-5 w-5 text-emerald-500" /> 2. Proventos Manuais</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-2">
-                            {manualProventos.map(p => (
-                                <div key={p.id} className="flex gap-2 items-center">
-                                    <Input placeholder="Descrição" value={p.label} onChange={(e) => handleUpdateRubrica('provento', p.id, 'label', e.target.value)} />
-                                    <MoneyInput id={`provento-${p.id}`} value={p.value} onValueChange={(val) => handleUpdateRubrica('provento', p.id, 'value', val)} />
-                                    <Button variant="ghost" size="icon" onClick={() => handleRemoveRubrica('provento', p.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                                </div>
-                            ))}
-                            <Button variant="outline" size="sm" className="w-full" onClick={() => handleAddRubrica('provento')}><Plus className="mr-2 h-4 w-4" />Adicionar Provento</Button>
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2"><ArrowDownCircle className="h-5 w-5 text-red-500" /> 3. Descontos Manuais</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-2">
-                            {manualDescontos.map(d => (
-                                <div key={d.id} className="flex gap-2 items-center">
-                                    <Input placeholder="Descrição" value={d.label} onChange={(e) => handleUpdateRubrica('desconto', d.id, 'label', e.target.value)} />
-                                    <MoneyInput id={`desconto-${d.id}`} value={d.value} onValueChange={(val) => handleUpdateRubrica('desconto', d.id, 'value', val)} />
-                                    <Button variant="ghost" size="icon" onClick={() => handleRemoveRubrica('desconto', d.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                                </div>
-                            ))}
-                            <Button variant="outline" size="sm" className="w-full" onClick={() => handleAddRubrica('desconto')}><Plus className="mr-2 h-4 w-4" />Adicionar Desconto</Button>
-                        </CardContent>
-                    </Card>
-                </div>
-                
                 <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2"><ArrowUpCircle className="h-5 w-5 text-emerald-500" /> 2. Proventos Manuais</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                        {manualProventos.map(p => (
+                            <div key={p.id} className="flex gap-2 items-center">
+                                <Input placeholder="Descrição" value={p.label} onChange={(e) => handleUpdateRubrica('provento', p.id, 'label', e.target.value)} />
+                                <MoneyInput id={`provento-${p.id}`} value={p.value} onValueChange={(val) => handleUpdateRubrica('provento', p.id, 'value', val)} />
+                                <Button variant="ghost" size="icon" onClick={() => handleRemoveRubrica('provento', p.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                            </div>
+                        ))}
+                        <Button variant="outline" size="sm" className="w-full" onClick={() => handleAddRubrica('provento')}><Plus className="mr-2 h-4 w-4" />Adicionar Provento</Button>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2"><ArrowDownCircle className="h-5 w-5 text-red-500" /> 3. Descontos Manuais</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                        {manualDescontos.map(d => (
+                            <div key={d.id} className="flex gap-2 items-center">
+                                <Input placeholder="Descrição" value={d.label} onChange={(e) => handleUpdateRubrica('desconto', d.id, 'label', e.target.value)} />
+                                <MoneyInput id={`desconto-${d.id}`} value={d.value} onValueChange={(val) => handleUpdateRubrica('desconto', d.id, 'value', val)} />
+                                <Button variant="ghost" size="icon" onClick={() => handleRemoveRubrica('desconto', d.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                            </div>
+                        ))}
+                        <Button variant="outline" size="sm" className="w-full" onClick={() => handleAddRubrica('desconto')}><Plus className="mr-2 h-4 w-4" />Adicionar Desconto</Button>
+                    </CardContent>
+                </Card>
+                 <Button onClick={() => handleCalculate()} disabled={proLaboreValue <= 0 || isLoading} className="w-full" size="lg">
+                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Calculator className="mr-2 h-4 w-4" />}
+                    {isLoading ? "Calculando..." : "Calcular / Recalcular"}
+                </Button>
+            </div>
+            <div className="lg:col-span-1">
+                 <Card className="min-h-full sticky top-24">
                     <CardHeader>
                         <div className="flex justify-between items-start">
                             <div>
                                 <CardTitle>4. Demonstrativo de Pagamento</CardTitle>
                                 <CardDescription>Resultado do cálculo do pró-labore.</CardDescription>
-                            </div>
-                            <div className="flex gap-2">
-                                <Button onClick={() => handleCalculate()} disabled={proLaboreValue <= 0 || isLoading}>
-                                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Calculator className="mr-2 h-4 w-4" />}
-                                    {isLoading ? "Recalculando..." : "Calcular"}
-                                </Button>
                             </div>
                         </div>
                     </CardHeader>
@@ -538,7 +536,7 @@ export default function RciCalculator() {
 
                             </div>
                         ) : (
-                                <div className="flex flex-col items-center justify-center text-center p-8 text-muted-foreground min-h-[250px]">
+                                <div className="flex flex-col items-center justify-center text-center p-8 text-muted-foreground min-h-[400px]">
                                 <Calculator className="h-12 w-12 mb-4" />
                                 <p className="font-medium">Preencha os dados e clique em "Calcular"</p>
                                 <p className="text-sm">O resultado do cálculo aparecerá aqui.</p>
