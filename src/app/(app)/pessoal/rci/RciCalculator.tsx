@@ -285,45 +285,50 @@ export default function RciCalculator() {
             });
             finalY = (doc as any).lastAutoTable.finalY + 5;
 
+            const mainTableBody = [
+                ...calculation.proventos.map((p, i) => [`10${i + 1}`, p.label, formatCurrencyNoSymbol(p.value), '']),
+                ...calculation.descontos.map((d, i) => [`20${i + 1}`, d.label, '', formatCurrencyNoSymbol(d.value)]),
+            ];
+
             autoTable(doc, {
                 startY: finalY,
                 head: [['Código', 'Descrição', 'Proventos', 'Descontos']],
-                body: [
-                    ...calculation.proventos.map((p, i) => [`10${i+1}`, p.label, formatCurrencyNoSymbol(p.value), '']),
-                    ...calculation.descontos.map((d, i) => [`20${i+1}`, d.label, '', formatCurrencyNoSymbol(d.value)]),
-                ],
+                body: mainTableBody,
                 theme: 'grid',
                 styles: { fontSize: 9, cellPadding: 2 },
                 headStyles: { fillColor: [240, 240, 240], textColor: 40, fontStyle: 'bold' },
-                columnStyles: { 
+                columnStyles: {
                     0: { halign: 'center', cellWidth: 20 },
-                    2: { halign: 'right' }, 
-                    3: { halign: 'right' } 
+                    2: { halign: 'right' },
+                    3: { halign: 'right' }
                 },
                 didParseCell: (data) => {
                     if (data.section === 'body' && data.column.index === 2 && data.cell.raw) {
-                         data.cell.styles.textColor = [22, 163, 74];
+                        data.cell.styles.textColor = [22, 163, 74];
                     }
                     if (data.section === 'body' && data.column.index === 3 && data.cell.raw) {
-                         data.cell.styles.textColor = [220, 38, 38];
+                        data.cell.styles.textColor = [220, 38, 38];
                     }
                 }
             });
             finalY = (doc as any).lastAutoTable.finalY;
 
-             autoTable(doc, {
+            const table = (doc as any).lastAutoTable.doc.previous;
+            const colWidths = table.columns.map((col: any) => col.width);
+
+            autoTable(doc, {
                 startY: finalY,
                 body: [['Totais', formatCurrencyNoSymbol(calculation.totalProventos), formatCurrencyNoSymbol(calculation.totalDescontos)]],
                 theme: 'grid',
                 styles: { fontSize: 9, cellPadding: 2, fontStyle: 'bold' },
                 columnStyles: {
-                    0: { cellWidth: 106.8 }, // 'Código' + 'Descrição' widths
-                    1: { halign: 'right', textColor: [22, 163, 74] },
-                    2: { halign: 'right', textColor: [220, 38, 38] },
+                    0: { halign: 'left', cellWidth: colWidths[0] + colWidths[1] },
+                    1: { halign: 'right', cellWidth: colWidths[2], textColor: [22, 163, 74] },
+                    2: { halign: 'right', cellWidth: colWidths[3], textColor: [220, 38, 38] },
                 }
-             });
-
+            });
             finalY = (doc as any).lastAutoTable.finalY;
+
              autoTable(doc, {
                 startY: finalY,
                 body: [['Valor Líquido a Receber:', { content: formatCurrency(calculation.liquido), styles: { halign: 'right' } }]],
@@ -380,20 +385,6 @@ export default function RciCalculator() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center gap-4">
-                <Link href="/pessoal">
-                    <Button variant="outline" size="icon" className="h-8 w-8">
-                        <ArrowLeft className="h-4 w-4" />
-                        <span className="sr-only">Voltar</span>
-                    </Button>
-                </Link>
-                <div className="space-y-1">
-                <h1 className="text-3xl font-bold tracking-tight font-headline">RCI (Pró-labore)</h1>
-                <p className="text-muted-foreground">
-                    Calcule o Recibo de Pagamento de Contribuinte Individual para pró-labore dos sócios.
-                </p>
-                </div>
-            </div>
             <div className="max-w-4xl mx-auto space-y-6">
                 <Card>
                     <CardHeader>
@@ -566,4 +557,3 @@ export default function RciCalculator() {
         </div>
     );
 }
-
