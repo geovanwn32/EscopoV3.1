@@ -1,3 +1,4 @@
+
 export type PersonType = 'JURIDICA' | 'FISICA';
 export type PartnerType = 'Cliente' | 'Fornecedor' | 'Transportadora';
 

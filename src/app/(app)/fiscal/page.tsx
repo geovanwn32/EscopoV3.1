@@ -265,17 +265,23 @@ export default function FiscalPage() {
         let parsedData = {};
 
         // Helper to save partner
-        const savePartner = (partnerData: Omit<Partner, 'id'>) => {
-            const existingPartner = partners.find(p => p.document === partnerData.document);
-            if (!existingPartner && partnerData.document && partnerData.name) {
+        const savePartner = (partnerData: Omit<Partner, 'id' | 'type'> & { type: Partner['type'] | null }) => {
+            const doc = partnerData.document.replace(/\D/g, '');
+            if (!doc || !partnerData.name) return; // Don't save if essential info is missing
+            const existingPartner = partners.find(p => p.document.replace(/\D/g, '') === doc);
+            
+            if (!existingPartner) {
                 const newPartner: Partner = {
                     id: Date.now() + Math.random(),
-                    ...partnerData,
+                    document: partnerData.document,
+                    name: partnerData.name,
+                    personType: doc.length > 11 ? 'JURIDICA' : 'FISICA',
+                    type: partnerData.type || (doc.length > 11 ? 'Fornecedor' : 'Cliente'), // Default type logic
                 };
                 setPartners(prev => [...prev, newPartner]);
                 toast({
-                    title: "Parceiro Cadastrado",
-                    description: `O parceiro ${newPartner.name} foi salvo automaticamente.`
+                    title: "Parceiro Cadastrado Automaticamente",
+                    description: `O parceiro ${newPartner.name} foi salvo no seu cadastro.`
                 });
             }
         };
@@ -324,9 +330,9 @@ export default function FiscalPage() {
             };
 
             const emitenteData = (parsedData as any).emitente;
-            if (emitenteData?.cnpj && emitenteData?.razaoSocial) {
-                savePartner({ document: emitenteData.cnpj, name: emitenteData.razaoSocial, type: 'Fornecedor' });
-            }
+            const destData = (parsedData as any).destinatario;
+            savePartner({ document: emitenteData.cnpj, name: emitenteData.razaoSocial, type: 'Fornecedor' });
+            savePartner({ document: destData.cnpj, name: destData.razaoSocial, type: 'Cliente' });
 
 
         } else if (content.includes('<infNFSe') || content.includes('<CompNfse')) {
@@ -353,14 +359,9 @@ export default function FiscalPage() {
              };
 
             const prestadorData = (parsedData as any).prestador;
-            if (prestadorData?.cnpj && prestadorData?.razaoSocial) {
-                savePartner({ document: prestadorData.cnpj, name: prestadorData.razaoSocial, type: 'Fornecedor' });
-            }
-
             const tomadorData = (parsedData as any).tomador;
-            if (tomadorData?.cnpj && tomadorData?.razaoSocial) {
-                savePartner({ document: tomadorData.cnpj, name: tomadorData.razaoSocial, type: 'Cliente' });
-            }
+            savePartner({ document: prestadorData.cnpj, name: prestadorData.razaoSocial, type: 'Fornecedor' });
+            savePartner({ document: tomadorData.cnpj, name: tomadorData.razaoSocial, type: 'Cliente' });
         }
 
         if (detectedModel) {
@@ -378,6 +379,16 @@ export default function FiscalPage() {
     };
 
     const handleDeleteXml = (id: number) => {
+        const xmlFile = xmls.find(x => x.id === id);
+        if (xmlFile?.status === 'Lançado') {
+            toast({
+                variant: "destructive",
+                title: "Ação não permitida",
+                description: "Não é possível excluir um XML que já foi lançado. Exclua a nota fiscal primeiro."
+            });
+            return;
+        }
+
         setXmls(prevXmls => prevXmls.filter(xml => xml.id !== id));
         toast({
             variant: "destructive",
@@ -1487,4 +1498,5 @@ function LancamentoDialog({ onOpenChange, tipoNota, initialData, onSave, isReadO
       </DialogContent>
     );
 }
+
 
