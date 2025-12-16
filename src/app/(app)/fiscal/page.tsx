@@ -28,6 +28,8 @@ import { NotaFiscal, ProductItem, ServiceItem, Product, Service } from "@/types/
 import { AuditLog, logAudit } from "@/lib/audit-log";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 
 const actions = [
@@ -120,6 +122,7 @@ export default function FiscalPage() {
     
     const [isReadOnly, setIsReadOnly] = useState(false);
     const [editingNota, setEditingNota] = useState<NotaFiscal | null>(null);
+    const [searchTerm, setSearchTerm] = useState('');
 
     const [rejectedFiles, setRejectedFiles] = useState<string[]>([]);
     const [rejectedFilesTitle, setRejectedFilesTitle] = useState('');
@@ -529,7 +532,7 @@ export default function FiscalPage() {
                                 <div className="flex w-full sm:w-auto items-center gap-2">
                                     <div className="relative flex-grow">
                                         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                                        <Input placeholder="Buscar..." className="pl-9 w-full" />
+                                        <Input placeholder="Buscar..." className="pl-9 w-full" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}/>
                                     </div>
                                     <Button variant="outline"><Filter className="mr-2 h-4 w-4"/>Filtrar</Button>
                                 </div>
@@ -555,16 +558,17 @@ export default function FiscalPage() {
                                         )}
                                         onLancar={handleLancarXml}
                                         onDelete={handleDeleteXml}
+                                        searchTerm={searchTerm}
                                     />
                                 </TabsContent>
                                 <TabsContent value="produtos">
-                                    <NotasFiscaisTable data={notasProduto} tipo="produto" onDelete={handleDeleteNota} onView={handleViewNota} onEdit={handleEditNota} />
+                                    <NotasFiscaisTable data={notasProduto} tipo="produto" onDelete={handleDeleteNota} onView={handleViewNota} onEdit={handleEditNota} searchTerm={searchTerm} />
                                 </TabsContent>
                                 <TabsContent value="saidas">
-                                    <NotasFiscaisTable data={notasSaida} tipo="saida" onDelete={handleDeleteNota} onView={handleViewNota} onEdit={handleEditNota} />
+                                    <NotasFiscaisTable data={notasSaida} tipo="saida" onDelete={handleDeleteNota} onView={handleViewNota} onEdit={handleEditNota} searchTerm={searchTerm} />
                                 </TabsContent>
                                 <TabsContent value="servicos">
-                                    <NotasFiscaisTable data={notasServico} tipo="servico" onDelete={handleDeleteNota} onView={handleViewNota} onEdit={handleEditNota} />
+                                    <NotasFiscaisTable data={notasServico} tipo="servico" onDelete={handleDeleteNota} onView={handleViewNota} onEdit={handleEditNota} searchTerm={searchTerm} />
                                 </TabsContent>
                                 <TabsContent value="recibos">
                                     <div className="text-center py-10">
@@ -679,15 +683,24 @@ function RecentDocumentsTable({
     renderRow,
     onLancar,
     onDelete,
+    searchTerm,
 }: { 
     headers: string[], 
-    data: any[], 
+    data: XmlFile[], 
     renderRow: (item: any) => React.ReactNode,
     onLancar?: (id: number) => void,
     onDelete?: (id: number) => void,
+    searchTerm: string,
 }) {
     const { toast } = useToast();
     const [itemToDelete, setItemToDelete] = useState<any | null>(null);
+
+    const filteredData = useMemo(() => {
+        return data.filter(item => 
+            item.fileName.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+    }, [data, searchTerm]);
+
 
     const handleDeleteClick = (item: any) => {
         setItemToDelete(item);
@@ -711,7 +724,7 @@ function RecentDocumentsTable({
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {data.length > 0 ? data.map((item) => (
+                        {filteredData.length > 0 ? filteredData.map((item) => (
                             <TableRow key={item.id}>
                                {renderRow(item)}
                                <TableCell>
@@ -773,15 +786,29 @@ function NotasFiscaisTable({
     tipo,
     onDelete,
     onView,
-    onEdit
+    onEdit,
+    searchTerm,
 }: { 
     data: NotaFiscal[], 
     tipo: 'produto' | 'saida' | 'servico',
     onDelete: (nota: NotaFiscal) => void,
     onView: (nota: NotaFiscal) => void,
     onEdit: (nota: NotaFiscal) => void,
+    searchTerm: string,
 }) {
     const [itemToDelete, setItemToDelete] = useState<NotaFiscal | null>(null);
+
+    const filteredData = useMemo(() => {
+        return data.filter(item => {
+            const numero = item.dados.geral?.numero || item.dados.identificacao?.numero || '';
+            const emitente = item.dados.emitente?.razaoSocial || item.dados.prestador?.razaoSocial || '';
+            const destinatario = item.dados.destinatario?.razaoSocial || item.dados.tomador?.razaoSocial || '';
+            return numero.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                   emitente.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                   destinatario.toLowerCase().includes(searchTerm.toLowerCase());
+        });
+    }, [data, searchTerm]);
+
 
     const handleDeleteClick = (item: NotaFiscal) => {
         setItemToDelete(item);
@@ -795,7 +822,7 @@ function NotasFiscaisTable({
     };
 
 
-    if (!data || data.length === 0) {
+    if (!data) {
         return (
             <div className="text-center py-10">
                 <p className="text-muted-foreground">Nenhuma nota de {tipo} encontrada.</p>
@@ -804,8 +831,8 @@ function NotasFiscaisTable({
     }
     
     const headers = tipo === 'servico' 
-        ? ['Número', 'Prestador', 'Tomador', 'Valor Total']
-        : ['Número', 'Emitente', 'Destinatário', 'Valor Total'];
+        ? ['Número', 'Data', 'Prestador', 'Tomador', 'Valor Total']
+        : ['Número', 'Data', 'Emitente', 'Destinatário', 'Valor Total'];
 
 
     const renderRow = (item: NotaFiscal) => {
@@ -813,9 +840,13 @@ function NotasFiscaisTable({
             ? (item.items as ServiceItem[]).reduce((acc: number, service) => acc + (Number(service.value) || 0), 0)
             : (item.items as ProductItem[]).reduce((acc: number, product) => acc + product.total, 0);
 
+        const dataEmissao = item.dados.geral?.dataEmissao || item.dados.identificacao?.dataEmissao;
+        const formattedDate = dataEmissao ? format(new Date(dataEmissao), 'dd/MM/yyyy', { locale: ptBR }) : 'N/A';
+
         return (
             <>
                 <TableCell className="font-medium">{item.dados.geral?.numero || item.dados.identificacao?.numero}</TableCell>
+                <TableCell>{formattedDate}</TableCell>
                 <TableCell>{item.dados.emitente?.razaoSocial || item.dados.prestador?.razaoSocial}</TableCell>
                 <TableCell>{item.dados.destinatario?.razaoSocial || item.dados.tomador?.razaoSocial}</TableCell>
                 <TableCell className="text-right font-mono">
@@ -836,7 +867,7 @@ function NotasFiscaisTable({
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {data.map((item) => (
+                     {filteredData.length > 0 ? filteredData.map((item) => (
                         <TableRow key={item.id}>
                             {renderRow(item)}
                             <TableCell>
@@ -858,7 +889,13 @@ function NotasFiscaisTable({
                                 </DropdownMenu>
                             </TableCell>
                         </TableRow>
-                    ))}
+                    )) : (
+                         <TableRow>
+                            <TableCell colSpan={headers.length + 1} className="h-24 text-center">
+                                {data.length === 0 ? `Nenhuma nota de ${tipo} encontrada.` : 'Nenhum resultado para a busca.'}
+                            </TableCell>
+                        </TableRow>
+                    )}
                 </TableBody>
             </Table>
         </div>
