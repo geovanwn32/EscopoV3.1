@@ -19,6 +19,7 @@ import autoTable from 'jspdf-autotable';
 import { useToast } from '@/hooks/use-toast';
 import { Rubrica, CalculationResult, SavedCalculation } from '@/types/pessoal';
 import Link from 'next/link';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 
 // Simplified tax brackets for demonstration
@@ -389,76 +390,73 @@ export default function RciCalculator() {
                 </div>
                 <Card>
                     <CardHeader>
-                        <CardTitle>1. Dados para Cálculo</CardTitle>
+                        <CardTitle>Dados do Cálculo</CardTitle>
                         <CardDescription>Preencha os dados do sócio e o valor do pró-labore.</CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="socioName">Sócio/Contribuinte</Label>
-                                <Select value={selectedSocioId} onValueChange={setSelectedSocioId}>
-                                    <SelectTrigger id="socioName">
-                                        <SelectValue placeholder="Selecione um sócio..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {socios.length > 0 ? (
-                                            socios.map(socio => (
-                                                <SelectItem key={socio.id} value={socio.id.toString()}>{socio.nome}</SelectItem>
-                                            ))
-                                        ) : (
-                                            <div className="p-4 text-sm text-muted-foreground">Nenhum sócio cadastrado.</div>
-                                        )}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="month">Competência</Label>
-                                <Input 
-                                    id="month" 
-                                    type="text" 
-                                    placeholder="MM/AAAA"
-                                    value={mesCompetencia} 
-                                    onChange={handleMesCompetenciaChange}
-                                    maxLength={7}
-                                />
-                            </div>
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="proLaboreValue">Valor do Pró-labore (R$)</Label>
-                            <MoneyInput id="proLaboreValue" value={proLaboreValue} onValueChange={setProLaboreValue} />
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2"><ArrowUpCircle className="h-5 w-5 text-emerald-500" /> 2. Proventos Manuais</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-2">
-                        {manualProventos.map(p => (
-                            <div key={p.id} className="flex gap-2 items-center">
-                                <Input placeholder="Descrição" value={p.label} onChange={(e) => handleUpdateRubrica('provento', p.id, 'label', e.target.value)} />
-                                <MoneyInput id={`provento-${p.id}`} value={p.value} onValueChange={(val) => handleUpdateRubrica('provento', p.id, 'value', val)} />
-                                <Button variant="ghost" size="icon" onClick={() => handleRemoveRubrica('provento', p.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                            </div>
-                        ))}
-                        <Button variant="outline" size="sm" className="w-full" onClick={() => handleAddRubrica('provento')}><Plus className="mr-2 h-4 w-4" />Adicionar Provento</Button>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2"><ArrowDownCircle className="h-5 w-5 text-red-500" /> 3. Descontos Manuais</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-2">
-                        {manualDescontos.map(d => (
-                            <div key={d.id} className="flex gap-2 items-center">
-                                <Input placeholder="Descrição" value={d.label} onChange={(e) => handleUpdateRubrica('desconto', d.id, 'label', e.target.value)} />
-                                <MoneyInput id={`desconto-${d.id}`} value={d.value} onValueChange={(val) => handleUpdateRubrica('desconto', d.id, 'value', val)} />
-                                <Button variant="ghost" size="icon" onClick={() => handleRemoveRubrica('desconto', d.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                            </div>
-                        ))}
-                        <Button variant="outline" size="sm" className="w-full" onClick={() => handleAddRubrica('desconto')}><Plus className="mr-2 h-4 w-4" />Adicionar Desconto</Button>
+                    <CardContent>
+                         <Tabs defaultValue="principal">
+                            <TabsList className="grid w-full grid-cols-3 mb-4">
+                                <TabsTrigger value="principal">Principal</TabsTrigger>
+                                <TabsTrigger value="proventos">Proventos</TabsTrigger>
+                                <TabsTrigger value="descontos">Descontos</TabsTrigger>
+                            </TabsList>
+                            <TabsContent value="principal" className="space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="socioName">Sócio/Contribuinte</Label>
+                                        <Select value={selectedSocioId} onValueChange={setSelectedSocioId}>
+                                            <SelectTrigger id="socioName">
+                                                <SelectValue placeholder="Selecione um sócio..." />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {socios.length > 0 ? (
+                                                    socios.map(socio => (
+                                                        <SelectItem key={socio.id} value={socio.id.toString()}>{socio.nome}</SelectItem>
+                                                    ))
+                                                ) : (
+                                                    <div className="p-4 text-sm text-muted-foreground">Nenhum sócio cadastrado.</div>
+                                                )}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="month">Competência</Label>
+                                        <Input 
+                                            id="month" 
+                                            type="text" 
+                                            placeholder="MM/AAAA"
+                                            value={mesCompetencia} 
+                                            onChange={handleMesCompetenciaChange}
+                                            maxLength={7}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="proLaboreValue">Valor do Pró-labore (R$)</Label>
+                                    <MoneyInput id="proLaboreValue" value={proLaboreValue} onValueChange={setProLaboreValue} />
+                                </div>
+                            </TabsContent>
+                            <TabsContent value="proventos" className="space-y-2">
+                                 {manualProventos.map(p => (
+                                    <div key={p.id} className="flex gap-2 items-center">
+                                        <Input placeholder="Descrição do provento" value={p.label} onChange={(e) => handleUpdateRubrica('provento', p.id, 'label', e.target.value)} />
+                                        <MoneyInput id={`provento-${p.id}`} value={p.value} onValueChange={(val) => handleUpdateRubrica('provento', p.id, 'value', val)} />
+                                        <Button variant="ghost" size="icon" onClick={() => handleRemoveRubrica('provento', p.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                                    </div>
+                                ))}
+                                <Button variant="outline" size="sm" className="w-full" onClick={() => handleAddRubrica('provento')}><Plus className="mr-2 h-4 w-4" />Adicionar Provento</Button>
+                            </TabsContent>
+                            <TabsContent value="descontos" className="space-y-2">
+                                {manualDescontos.map(d => (
+                                    <div key={d.id} className="flex gap-2 items-center">
+                                        <Input placeholder="Descrição do desconto" value={d.label} onChange={(e) => handleUpdateRubrica('desconto', d.id, 'label', e.target.value)} />
+                                        <MoneyInput id={`desconto-${d.id}`} value={d.value} onValueChange={(val) => handleUpdateRubrica('desconto', d.id, 'value', val)} />
+                                        <Button variant="ghost" size="icon" onClick={() => handleRemoveRubrica('desconto', d.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                                    </div>
+                                ))}
+                                <Button variant="outline" size="sm" className="w-full" onClick={() => handleAddRubrica('desconto')}><Plus className="mr-2 h-4 w-4" />Adicionar Desconto</Button>
+                            </TabsContent>
+                         </Tabs>
                     </CardContent>
                 </Card>
                  <Button onClick={() => handleCalculate()} disabled={proLaboreValue <= 0 || isLoading} className="w-full" size="lg">
@@ -471,7 +469,7 @@ export default function RciCalculator() {
                     <CardHeader>
                         <div className="flex justify-between items-start">
                             <div>
-                                <CardTitle>4. Demonstrativo de Pagamento</CardTitle>
+                                <CardTitle>Demonstrativo de Pagamento</CardTitle>
                                 <CardDescription>Resultado do cálculo do pró-labore.</CardDescription>
                             </div>
                         </div>
