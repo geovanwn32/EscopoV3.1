@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { cn } from "@/lib/utils";
 import { PackagePlus, Wrench, Upload, FileMinus, Receipt, MoreHorizontal, Search, Filter, Plus, FileUp, Trash2, X, Eye, Pencil, ChevronsUpDown, Check, Calculator } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from 'next/navigation';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -502,7 +503,7 @@ export default function FiscalPage() {
                                     action.id === 'nota-produto' ? () => openLancamentoDialog('produto') :
                                     action.id === 'nota-saida' ? () => openLancamentoDialog('saida') :
                                     action.id === 'nota-servico' ? () => openLancamentoDialog('servico') :
-                                    action.id === 'apurar-impostos' ? () => router.push('/fiscal/apuracao') :
+                                    action.id === 'apurar-impostos' ? () => {} :
                                     undefined
                                 }
                             />
