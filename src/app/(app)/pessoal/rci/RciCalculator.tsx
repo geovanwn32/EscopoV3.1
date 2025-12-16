@@ -249,40 +249,33 @@ export default function RciCalculator() {
     
             finalY += 25;
     
-            const companyAddress = [
-                activeCompany.data?.logradouro,
-                activeCompany.data?.numero,
-                activeCompany.data?.bairro,
-            ].filter(Boolean).join(', ') + `\n${activeCompany.data?.cidade || ''} - ${activeCompany.data?.uf || ''}, ${activeCompany.data?.cep || ''}`;
-    
+            // Company and Partner Info Tables
             autoTable(doc, {
                 startY: finalY,
                 theme: 'plain',
                 styles: { fontSize: 8, cellPadding: 0.5 },
                 body: [
                     [{ content: 'Empresa Pagadora (Fonte)', styles: { fontStyle: 'bold' } }],
-                    [{ content: `${activeCompany.data?.razaoSocial || activeCompany.name}` }],
+                    [{ content: `Razão Social: ${activeCompany.data?.razaoSocial || activeCompany.name}` }],
                     [{ content: `CNPJ: ${activeCompany.data?.cnpj || ''}` }],
-                    [{ content: companyAddress, styles: { cellWidth: 'wrap' } }],
                 ],
             });
     
-            finalY = (doc as any).lastAutoTable.finalY + 2;
-
             autoTable(doc, {
                 startY: finalY,
                 theme: 'plain',
                 styles: { fontSize: 8, cellPadding: 0.5 },
                 body: [
                     [{ content: 'Sócio / Beneficiário', styles: { fontStyle: 'bold' } }],
-                    [{ content: `${selectedSocio.nome}` }],
+                    [{ content: `Nome: ${selectedSocio.nome}` }],
                     [{ content: `CPF: ${selectedSocio.cpf}` }],
                     [{ content: `NIT/PIS: ${selectedSocio.nit || 'Não informado'}` }],
                 ],
+                margin: { left: doc.internal.pageSize.width / 2 }
             });
     
             finalY = (doc as any).lastAutoTable.finalY + 3;
-    
+
             // Main Content Table
             const mainTableBody = [
                 ...calculation.proventos.map((p, i) => [`10${i + 1}`, p.label, formatCurrencyNoSymbol(p.value), '']),
@@ -297,58 +290,34 @@ export default function RciCalculator() {
                 headStyles: { fillColor: [240, 240, 240], textColor: 40, fontStyle: 'bold', fontSize: 8, cellPadding: 1 },
                 bodyStyles: { fontSize: 8, cellPadding: 1 },
                 columnStyles: {
-                    0: { cellWidth: 15, halign: 'center' },
+                    0: { cellWidth: 20 },
                     1: { cellWidth: 'auto' },
-                    2: { halign: 'right', textColor: [22, 163, 74], cellWidth: 30 },
-                    3: { halign: 'right', textColor: [220, 38, 38], cellWidth: 30 }
+                    2: { halign: 'right', textColor: [22, 163, 74], cellWidth: 35 },
+                    3: { halign: 'right', textColor: [220, 38, 38], cellWidth: 35 }
                 }
             });
             finalY = (doc as any).lastAutoTable.finalY;
 
-            const totalsTable = (doc as any).lastAutoTable.doc.previous;
-            const totalsColWidths = totalsTable.columns.map((col: any) => col.width);
-
-            // Summary Table
+             // Summary Table
             autoTable(doc, {
                 startY: finalY,
                 theme: 'grid',
                 body: [
                     [
-                        { content: 'Totais:', styles: { halign: 'right', fontStyle: 'bold' } },
+                        { content: 'Totais:', colSpan: 2, styles: { halign: 'right', fontStyle: 'bold' } },
                         { content: formatCurrencyNoSymbol(calculation.totalProventos), styles: { halign: 'right', fontStyle: 'bold', textColor: [22, 163, 74] } },
                         { content: formatCurrencyNoSymbol(calculation.totalDescontos), styles: { halign: 'right', fontStyle: 'bold', textColor: [220, 38, 38] } },
                     ],
-                ],
-                columnStyles: { 
-                    0: { cellWidth: totalsColWidths[0] + totalsColWidths[1] },
-                    1: { cellWidth: totalsColWidths[2] },
-                    2: { cellWidth: totalsColWidths[3] },
-                },
-                bodyStyles: { fontSize: 8, fontStyle: 'bold', cellPadding: 1 },
-            });
-            finalY = (doc as any).lastAutoTable.finalY;
-
-            const liquidTable = (doc as any).lastAutoTable.doc.previous;
-            const liquidColWidths = liquidTable.columns.map((col: any) => col.width);
-            
-            autoTable(doc, {
-                startY: finalY,
-                theme: 'grid',
-                body: [
-                     [
-                        { content: 'Valor Líquido:', styles: { halign: 'right', fontStyle: 'bold' } },
-                        { content: formatCurrency(calculation.liquido), styles: { halign: 'right', fontStyle: 'bold' } },
+                    [
+                        { content: 'Valor Líquido:', colSpan: 3, styles: { halign: 'right', fontStyle: 'bold', cellPadding: 1.5 } },
+                        { content: formatCurrency(calculation.liquido), styles: { halign: 'right', fontStyle: 'bold', cellPadding: 1.5, fontSize: 9 } },
                     ]
                 ],
-                columnStyles: {
-                     0: { cellWidth: liquidColWidths[0] + liquidColWidths[1], cellPadding: 1.5 },
-                     1: { cellWidth: liquidColWidths[2], cellPadding: 1.5 }
-                },
-                 bodyStyles: { fontSize: 9 },
+                bodyStyles: { fontSize: 8, cellPadding: 1 },
             });
             finalY = (doc as any).lastAutoTable.finalY;
 
-             // Bases
+            // Bases
             autoTable(doc, {
                 startY: finalY,
                 theme: 'plain',
@@ -364,11 +333,11 @@ export default function RciCalculator() {
             doc.setFontSize(6);
             doc.setTextColor(150);
             doc.text(
-                "Declaro ter recebido o valor líquido descrito neste recibo, dando plena e total quitação do mesmo. A contribuição do Contribuinte Individual (sócio) para a Previdência Social (INSS) é de 11% sobre o valor do pró-labore, respeitando-se o teto de contribuição.",
+                "Declaro ter recebido o valor líquido descrito neste recibo, dando plena e total quitação do mesmo.",
                 pageMargin, finalY,
                 { maxWidth: doc.internal.pageSize.width - pageMargin * 2, align: 'justify' }
             );
-            finalY += 6;
+            finalY += 4;
             
             // Signature lines
             autoTable(doc, {
