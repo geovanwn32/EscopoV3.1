@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { MoreHorizontal, Plus, ChevronRight, ChevronDown, Trash2, Pencil } from 'lucide-react';
+import { MoreHorizontal, Plus, ChevronRight, ChevronDown, Trash2, Pencil, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -16,6 +16,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useCompany } from '@/hooks/use-company';
 import { Account, AccountType, AccountNature } from '@/types/contabil';
 import { cn } from '@/lib/utils';
+import Link from 'next/link';
 
 
 const defaultAccounts: Account[] = [];
@@ -68,9 +69,17 @@ export default function PlanoDeContasPage() {
 
     return (
         <div className="space-y-6">
-            <div className="space-y-1">
-                <h1 className="text-3xl font-bold tracking-tight font-headline">Plano de Contas</h1>
-                <p className="text-muted-foreground">Gerencie a estrutura de contas da sua empresa.</p>
+            <div className="flex items-center gap-4">
+                <Link href="/cadastros">
+                    <Button variant="outline" size="icon" className="h-8 w-8">
+                        <ArrowLeft className="h-4 w-4" />
+                        <span className="sr-only">Voltar</span>
+                    </Button>
+                </Link>
+                <div className="space-y-1">
+                    <h1 className="text-3xl font-bold tracking-tight font-headline">Plano de Contas</h1>
+                    <p className="text-muted-foreground">Gerencie a estrutura de contas da sua empresa.</p>
+                </div>
             </div>
 
             <Card>
@@ -306,3 +315,4 @@ function AccountForm({ onSave, onOpenChange, accounts, account }: AccountFormPro
     );
 }
 
+    
