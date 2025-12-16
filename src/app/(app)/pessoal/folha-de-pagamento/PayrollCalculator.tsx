@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCompany } from '@/hooks/use-company';
 import { Funcionario } from '@/types/pessoal';
-import { Plus, Trash2, Info, RefreshCw, X, Copy, Wand2, Paperclip, Calendar as CalendarIcon, MoreHorizontal, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Filter, Search, Check, ChevronsUpDown } from 'lucide-react';
+import { Info, Calendar as CalendarIcon, MoreHorizontal, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Filter, Search, Check, ChevronsUpDown, Calculator, Save, FileDown } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHeader, TableRow, TableHead, TableFooter } from '@/components/ui/table';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -71,10 +71,10 @@ export default function PayrollCalculator() {
                         Folha de Pagamento
                         <Info className="h-4 w-4 text-muted-foreground cursor-pointer" />
                     </CardTitle>
-                    <div className="flex flex-wrap items-center gap-2">
-                        <Button variant="outline" size="icon"><Plus className="h-4 w-4" /></Button>
-                        <Button variant="outline" size="icon"><Trash2 className="h-4 w-4" /></Button>
-                        <Button variant="default">Calcular</Button>
+                     <div className="flex flex-wrap items-center gap-2">
+                        <Button variant="default"><Calculator className="mr-2 h-4 w-4" />Calcular</Button>
+                        <Button variant="outline"><Save className="mr-2 h-4 w-4" />Salvar</Button>
+                        <Button variant="outline"><FileDown className="mr-2 h-4 w-4" />PDF</Button>
                     </div>
                 </div>
                  <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-4 pt-6">
