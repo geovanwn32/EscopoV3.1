@@ -1,7 +1,7 @@
 
 'use client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Package, Users, Handshake, Briefcase, FileText, FileSignature, Scale, Table, Globe, BookText, AreaChart, Tags } from 'lucide-react';
+import { Package, Users, Handshake, Briefcase, FileText, FileSignature, Scale, Table, Globe, BookText, AreaChart, Tags, Library } from 'lucide-react';
 import Link from 'next/link';
 
 const cadastroItens = [
@@ -46,6 +46,13 @@ const cadastroItens = [
         label: 'Parceiros',
         description: 'Gerencie clientes, fornecedores e transportadoras.',
         color: "text-sky-600 bg-sky-100/80 group-hover:bg-sky-600 dark:bg-sky-900/40 dark:text-sky-400 dark:group-hover:bg-sky-500",
+    },
+    {
+        href: '/contabil/plano-de-contas',
+        icon: <Library className="h-8 w-8" />,
+        label: 'Plano de Contas',
+        description: 'Estrutura de contas contábeis da empresa.',
+        color: "text-gray-600 bg-gray-100/80 group-hover:bg-gray-600 dark:bg-gray-700/40 dark:text-gray-400 dark:group-hover:bg-gray-500",
     },
     {
         href: '/cadastros/produtos',
@@ -110,7 +117,7 @@ const cadastroItens = [
         description: 'Gerencie usuários, perfis e permissões de acesso.',
         color: "text-orange-600 bg-orange-100/80 group-hover:bg-orange-600 dark:bg-orange-900/40 dark:text-orange-400 dark:group-hover:bg-orange-500",
     },
-]
+].sort((a, b) => a.label.localeCompare(b.label));
 
 export default function CadastrosPage() {
     return (
