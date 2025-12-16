@@ -1,4 +1,5 @@
 
+
 'use client';
 import { useState, useMemo, useEffect } from 'react';
 import { MoreHorizontal, Plus, Search, Trash2, Pencil, ArrowLeft, ShieldCheck, ShieldAlert, Building, KeyRound, User as UserIcon, Save, Crown } from 'lucide-react';
@@ -104,10 +105,6 @@ export default function UsuariosPage() {
                     statusLicenca: itemData.statusLicenca,
                 };
                 
-                if (itemData.password) {
-                    updatePayload.password = itemData.password;
-                }
-
                 await updateDoc(userDocRef, updatePayload);
 
                 toast({ title: "Usuário Atualizado!", description: "Os dados do usuário foram atualizados." });
@@ -118,13 +115,14 @@ export default function UsuariosPage() {
                  const newItem: User = { 
                     ...itemData, 
                     id: newId, 
-                    uid: firebaseUser?.uid || undefined
+                    uid: firebaseUser?.uid || undefined,
+                    status: 'Pendente', // Always starts as pending
                 };
                 const userDocRef = doc(firestore, "empresas", String(currentCompanyId), "usuarios", newId);
                 await setDoc(userDocRef, newItem);
                 
-                toast({ title: "Usuário Adicionado!", description: "Um novo usuário foi convidado para a empresa." });
-                logDetails = `Criou o usuário "${itemData.name}" (${itemData.email}).`;
+                toast({ title: "Convite Enviado!", description: "O usuário foi convidado. Ele precisará se cadastrar com o mesmo e-mail para ativar a conta." });
+                logDetails = `Convidou o usuário "${itemData.name}" (${itemData.email}).`;
             }
 
             // logAudit(setAuditLogs, action, 'Usuários', logDetails);
@@ -383,7 +381,6 @@ const initialPermissions = modules.reduce((acc, module) => {
 const initialFormState: Omit<User, 'id'> = {
     name: '',
     email: '',
-    password: '',
     isAdmin: false,
     isMaster: false,
     permissions: initialPermissions,
@@ -411,7 +408,6 @@ function ItemForm({ onSave, onOpenChange, item, users, activeProfile, allCompani
                 uid: item.uid || '',
                 name: item.name || '',
                 email: item.email || '',
-                password: '',
                 isAdmin: item.isAdmin || false,
                 isMaster: item.isMaster || false,
                 permissions: item.permissions || initialPermissions,
@@ -450,14 +446,6 @@ function ItemForm({ onSave, onOpenChange, item, users, activeProfile, allCompani
             });
             return;
         }
-        if (!item && !formData.password) {
-             toast({
-                variant: 'destructive',
-                title: 'Campo Obrigatório',
-                description: 'A senha é obrigatória para novos usuários.'
-            });
-            return;
-        }
         onSave(formData);
     };
     
@@ -467,7 +455,9 @@ function ItemForm({ onSave, onOpenChange, item, users, activeProfile, allCompani
         <DialogContent className="sm:max-w-lg">
             <DialogHeader>
                 <DialogTitle>{item ? 'Editar' : 'Convidar'} Usuário</DialogTitle>
-                <DialogDescription>Preencha os dados e defina o perfil de acesso do usuário.</DialogDescription>
+                <DialogDescription>
+                    {item ? 'Edite os dados e o perfil de acesso do usuário.' : 'Preencha os dados para convidar um novo usuário. Ele precisará se cadastrar com o mesmo e-mail para ativar a conta.'}
+                </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
                  <div className="space-y-2">
@@ -477,10 +467,6 @@ function ItemForm({ onSave, onOpenChange, item, users, activeProfile, allCompani
                  <div className="space-y-2">
                     <Label htmlFor="email">E-mail</Label>
                     <Input id="email" type="email" value={formData.email} onChange={(e) => handleInputChange('email', e.target.value)} required />
-                </div>
-                <div className="space-y-2">
-                    <Label htmlFor="password">{item ? 'Nova Senha' : 'Senha'}</Label>
-                    <Input id="password" type="password" value={formData.password} onChange={(e) => handleInputChange('password', e.target.value as any)} placeholder={item ? "Deixe em branco para não alterar" : "Senha de acesso"} />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
@@ -581,7 +567,7 @@ function ItemForm({ onSave, onOpenChange, item, users, activeProfile, allCompani
                 
                 <DialogFooter>
                     <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-                    <Button type="submit">Salvar</Button>
+                    <Button type="submit">{item ? 'Salvar' : 'Convidar'}</Button>
                 </DialogFooter>
             </form>
         </DialogContent>
@@ -663,3 +649,4 @@ function MyProfileCard({ profile, onSave }: MyProfileCardProps) {
     
 
     
+
