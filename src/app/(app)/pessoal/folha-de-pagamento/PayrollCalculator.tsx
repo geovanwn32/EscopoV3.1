@@ -85,7 +85,7 @@ export default function PayrollCalculator() {
                         <Label htmlFor="employee">Empregado</Label>
                         <Select value={selectedEmployeeId} onValueChange={setSelectedEmployeeId}>
                             <SelectTrigger id="employee">
-                                <SelectValue placeholder="Funcionário Teste - 1" />
+                                <SelectValue placeholder="Selecione um funcionário..." />
                             </SelectTrigger>
                             <SelectContent>
                                 {funcionarios.map(f => <SelectItem key={f.id} value={f.id.toString()}>{f.nome}</SelectItem>)}
