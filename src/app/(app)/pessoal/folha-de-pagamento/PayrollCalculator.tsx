@@ -3,12 +3,11 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCompany } from '@/hooks/use-company';
 import { Funcionario, Rubrica, CalculationResult, SavedCalculation } from '@/types/pessoal';
-import { Loader2, Calculator, Save, FileDown, Plus, Trash2, Info, Check, ChevronsUpDown, Calendar as CalendarIcon } from 'lucide-react';
+import { Loader2, Calculator, Save, FileDown, Plus, Trash2, Check, ChevronsUpDown, Calendar as CalendarIcon } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHeader, TableRow, TableHead, TableFooter } from '@/components/ui/table';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
@@ -55,6 +54,7 @@ export default function PayrollCalculator() {
     const [faltas, setFaltas] = useState(0);
     const [horasExtras50, setHorasExtras50] = useState(0);
     const [horasExtras100, setHorasExtras100] = useState(0);
+    const [domingosFeriados, setDomingosFeriados] = useState(4); // Default to 4 Sundays
 
     const [manualProventos, setManualProventos] = useState<Rubrica[]>([]);
     const [manualDescontos, setManualDescontos] = useState<Rubrica[]>([]);
@@ -83,6 +83,16 @@ export default function PayrollCalculator() {
         if (type === 'provento') setManualProventos(remover);
         else setManualDescontos(remover);
     };
+    
+    const clearForm = () => {
+        setFaltas(0);
+        setHorasExtras50(0);
+        setHorasExtras100(0);
+        setDomingosFeriados(4);
+        setManualProventos([]);
+        setManualDescontos([]);
+        setCalculation(null);
+    }
 
     const handleCalculate = () => {
         if (!selectedEmployee) {
@@ -94,8 +104,9 @@ export default function PayrollCalculator() {
 
         setTimeout(() => {
             const salarioBase = selectedEmployee.salario;
-            const diasMes = 30; // Simplificação para cálculo mensal
-
+            const diasUteis = 26; // Simplificação para dias úteis no mês
+            const diasMes = diasUteis + domingosFeriados; // Total de dias considerados
+            
             // Cálculo de Faltas e Horas Extras
             const valorDia = salarioBase / diasMes;
             const descontoFaltas = valorDia * faltas;
@@ -103,9 +114,13 @@ export default function PayrollCalculator() {
             const valorHora = salarioBase / 220; // Carga horária padrão
             const valorHE50 = valorHora * 1.5 * horasExtras50;
             const valorHE100 = valorHora * 2 * horasExtras100;
+            const valorTotalHE = valorHE50 + valorHE100;
+
+            // Cálculo DSR sobre Horas Extras
+            const dsr = (valorTotalHE / diasUteis) * domingosFeriados;
             
             // Base de Cálculo INSS
-            const totalProventosSemManuais = salarioBase - descontoFaltas + valorHE50 + valorHE100;
+            const totalProventosSemManuais = salarioBase - descontoFaltas + valorTotalHE + dsr;
             const totalManualProventos = manualProventos.reduce((acc, p) => acc + (p.value || 0), 0);
             const baseInss = totalProventosSemManuais + totalManualProventos;
 
@@ -150,6 +165,7 @@ export default function PayrollCalculator() {
             ];
             if (valorHE50 > 0) proventos.push({ id: 2, codigo: '102', descricao: 'Horas Extras 50%', tipo: 'Provento', value: valorHE50, incidencias: { inss: true, irrf: true, fgts: true, contribuicaoSindical: false } });
             if (valorHE100 > 0) proventos.push({ id: 3, codigo: '103', descricao: 'Horas Extras 100%', tipo: 'Provento', value: valorHE100, incidencias: { inss: true, irrf: true, fgts: true, contribuicaoSindical: false } });
+            if (dsr > 0) proventos.push({ id: 4, codigo: '104', descricao: 'D.S.R. sobre Horas Extras', tipo: 'Provento', value: dsr, incidencias: { inss: true, irrf: true, fgts: true, contribuicaoSindical: false } });
             proventos.push(...manualProventos.filter(p => p.value || 0 > 0));
 
             const descontos: Rubrica[] = [];
@@ -200,6 +216,7 @@ export default function PayrollCalculator() {
 
         setSavedCalculations(prev => [newSavedCalc, ...prev]);
         toast({ title: 'Cálculo Salvo!', description: 'O resultado foi salvo no histórico de cálculos.' });
+        clearForm();
     };
 
     const handleGeneratePdf = () => {
@@ -343,18 +360,22 @@ export default function PayrollCalculator() {
                                 </Popover>
                             </div>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <div className="space-y-2">
                                 <Label htmlFor="faltas">Faltas (dias)</Label>
                                 <Input id="faltas" type="number" value={faltas} onChange={e => setFaltas(Number(e.target.value))} min={0} />
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="he50">Horas Extras 50%</Label>
+                                <Label htmlFor="he50">HE 50%</Label>
                                 <Input id="he50" type="number" value={horasExtras50} onChange={e => setHorasExtras50(Number(e.target.value))} min={0} />
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="he100">Horas Extras 100%</Label>
+                                <Label htmlFor="he100">HE 100%</Label>
                                 <Input id="he100" type="number" value={horasExtras100} onChange={e => setHorasExtras100(Number(e.target.value))} min={0} />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="dsr">DSRs (dias)</Label>
+                                <Input id="dsr" type="number" value={domingosFeriados} onChange={e => setDomingosFeriados(Number(e.target.value))} min={0} />
                             </div>
                         </div>
                     </CardContent>
@@ -450,4 +471,3 @@ export default function PayrollCalculator() {
         </div>
     );
 }
-
