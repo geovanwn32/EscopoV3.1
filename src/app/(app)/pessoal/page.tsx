@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { SavedCalculation } from '@/types/pessoal';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
@@ -131,7 +131,7 @@ function RecentCalculations() {
                                                          <DropdownMenuItem onClick={() => handleEdit(calc)}>
                                                             <Pencil className="mr-2 h-4 w-4" /> Editar
                                                         </DropdownMenuItem>
-                                                        <DropdownMenuItem>
+                                                        <DropdownMenuItem disabled>
                                                             <FileDown className="mr-2 h-4 w-4" /> Baixar PDF
                                                         </DropdownMenuItem>
                                                         <DropdownMenuItem onClick={() => handleDeleteClick(calc)} className="text-destructive focus:text-destructive">
@@ -240,109 +240,135 @@ function ReportGeneratorDialog() {
     const [savedCalculations] = useScopedData<SavedCalculation[]>('pessoal-calculos-salvos', []);
     const { toast } = useToast();
     const [isLoading, setIsLoading] = useState(false);
+    const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [mesCompetencia, setMesCompetencia] = useState<string>(`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`);
-    const activeCompany = companies.find(c => c.id === currentCompany);
+    
+    const activeCompany = useMemo(() => companies.find(c => c.id === currentCompany), [companies, currentCompany]);
 
-    const handleGenerateReport = () => {
-        setIsLoading(true);
-        
+    const filteredCalculations = useMemo(() => {
         const [year, month] = mesCompetencia.split('-').map(Number);
-        
-        const filteredCalculations = savedCalculations.filter(calc => {
+        return savedCalculations.filter(calc => {
             const calcDate = new Date(calc.date);
             return calcDate.getFullYear() === year && calcDate.getMonth() === month - 1;
         });
+    }, [mesCompetencia, savedCalculations]);
 
+
+    const handleGenerateReport = () => {
         if (filteredCalculations.length === 0) {
             toast({
                 variant: 'destructive',
                 title: 'Nenhum cálculo encontrado',
-                description: `Não há cálculos salvos para a competência ${month}/${year}.`,
+                description: `Não há cálculos salvos para a competência selecionada.`,
             });
-            setIsLoading(false);
             return;
         }
 
+        setIsLoading(true);
+
         setTimeout(() => {
-            const doc = new jsPDF();
-            const pageMargin = 15;
-            let finalY = 20;
+            try {
+                const doc = new jsPDF();
+                const pageMargin = 15;
+                let finalY = 20;
 
-            // Header
-            doc.setFontSize(18);
-            doc.setFont('helvetica', 'bold');
-            doc.text('Relatório Mensal de Cálculos', doc.internal.pageSize.width / 2, finalY, { align: 'center' });
-            finalY += 8;
-            doc.setFontSize(12);
-            doc.setFont('helvetica', 'normal');
-            doc.text(`Competência: ${String(month).padStart(2, '0')}/${year}`, doc.internal.pageSize.width / 2, finalY, { align: 'center' });
-            finalY += 8;
-            doc.text(`Empresa: ${activeCompany?.name || 'N/A'}`, doc.internal.pageSize.width / 2, finalY, { align: 'center' });
-            finalY += 15;
+                // Header
+                if (activeCompany?.data?.logo) {
+                    try { doc.addImage(activeCompany.data.logo, 'PNG', pageMargin, finalY - 10, 20, 20); } 
+                    catch (e) { console.error("Error adding logo to PDF:", e); }
+                }
 
-            const tableData = filteredCalculations.map(calc => ([
-                format(new Date(calc.date), 'dd/MM/yyyy'),
-                calc.type,
-                calc.socioName || calc.employeeName || 'N/A',
-                calc.netValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-            ]));
+                doc.setFontSize(16);
+                doc.setFont('helvetica', 'bold');
+                doc.text('Relatório Mensal de Cálculos', doc.internal.pageSize.width / 2, finalY, { align: 'center' });
+                finalY += 8;
+                
+                doc.setFontSize(10);
+                doc.setFont('helvetica', 'normal');
+                doc.text(`Competência: ${format(new Date(mesCompetencia + '-02'), 'MM/yyyy')}`, doc.internal.pageSize.width / 2, finalY, { align: 'center' });
+                finalY += 6;
+                doc.text(`Empresa: ${activeCompany?.name || 'N/A'}`, doc.internal.pageSize.width / 2, finalY, { align: 'center' });
+                doc.text(`CNPJ: ${activeCompany?.data?.cnpj || 'N/A'}`, doc.internal.pageSize.width / 2, finalY + 5, { align: 'center' });
+                finalY += 15;
 
-            autoTable(doc, {
-                startY: finalY,
-                head: [['Data', 'Tipo', 'Nome', 'Valor Líquido']],
-                body: tableData,
-                theme: 'grid',
-            });
-            
-            finalY = (doc as any).lastAutoTable.finalY + 10;
-            
-            const totalFolha = filteredCalculations.filter(c => c.type === 'Folha').reduce((sum, c) => sum + c.netValue, 0);
-            const totalRci = filteredCalculations.filter(c => c.type === 'RCI').reduce((sum, c) => sum + c.netValue, 0);
-            const totalGeral = totalFolha + totalRci;
+                const tableData = filteredCalculations.map(calc => ([
+                    format(new Date(calc.date), 'dd/MM/yyyy'),
+                    calc.type,
+                    calc.socioName || calc.employeeName || 'N/A',
+                    calc.netValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                ]));
 
-            autoTable(doc, {
-                startY: finalY,
-                theme: 'plain',
-                body: [
-                    ['Total Folha de Pagamento:', totalFolha.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })],
-                    ['Total Pró-labore (RCI):', totalRci.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })],
-                    [{ content: 'Total Geral do Mês:', styles: {fontStyle: 'bold'} }, { content: totalGeral.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), styles: {fontStyle: 'bold'} }],
-                ]
-            });
+                autoTable(doc, {
+                    startY: finalY,
+                    head: [['Data', 'Tipo', 'Nome', 'Valor Líquido']],
+                    body: tableData,
+                    theme: 'grid',
+                    headStyles: { fillColor: [240, 240, 240], textColor: 40, fontStyle: 'bold' },
+                });
+                
+                finalY = (doc as any).lastAutoTable.finalY + 10;
+                
+                const totalFolha = filteredCalculations.filter(c => c.type === 'Folha').reduce((sum, c) => sum + c.netValue, 0);
+                const totalRci = filteredCalculations.filter(c => c.type === 'RCI').reduce((sum, c) => sum + c.netValue, 0);
+                const totalGeral = totalFolha + totalRci;
 
+                autoTable(doc, {
+                    startY: finalY,
+                    theme: 'plain',
+                    styles: { fontSize: 10 },
+                    body: [
+                        ['Total Folha de Pagamento:', totalFolha.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })],
+                        ['Total Pró-labore (RCI):', totalRci.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })],
+                        [{ content: 'Total Geral do Mês:', styles: {fontStyle: 'bold'} }, { content: totalGeral.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), styles: {fontStyle: 'bold'} }],
+                    ]
+                });
 
-            doc.save(`Relatorio_Calculos_${month}_${year}.pdf`);
-
-            setIsLoading(false);
-            toast({ title: 'Relatório Gerado!', description: 'O PDF foi baixado com sucesso.' });
+                doc.save(`Relatorio_Calculos_${mesCompetencia.replace('-', '_')}.pdf`);
+                toast({ title: 'Relatório Gerado!', description: 'O PDF foi baixado com sucesso.' });
+            } catch(e) {
+                console.error("PDF Generation Error: ", e);
+                toast({ variant: 'destructive', title: 'Erro ao gerar PDF', description: 'Ocorreu um problema ao criar o arquivo.' });
+            } finally {
+                setIsLoading(false);
+                setIsDialogOpen(false);
+            }
         }, 1000);
     }
 
     return (
-        <Dialog>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
                 <Button size="lg">
                     <FileText className="mr-2 h-5 w-5" /> Gerar Relatório de Cálculos
                 </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="sm:max-w-md">
                 <DialogHeader>
                     <DialogTitle>Gerar Relatório Mensal</DialogTitle>
                     <DialogDescription>
                         Selecione o mês e o ano para gerar um relatório em PDF com todos os cálculos salvos no período.
                     </DialogDescription>
                 </DialogHeader>
-                <div className="py-4">
-                    <Label htmlFor="report-month">Mês de Competência</Label>
-                    <Input 
-                        id="report-month" 
-                        type="month" 
-                        value={mesCompetencia} 
-                        onChange={(e) => setMesCompetencia(e.target.value)} 
-                    />
+                <div className="py-4 space-y-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="report-month">Mês de Competência</Label>
+                        <Input 
+                            id="report-month" 
+                            type="month" 
+                            value={mesCompetencia} 
+                            onChange={(e) => setMesCompetencia(e.target.value)} 
+                        />
+                    </div>
+                     <div className="text-sm text-muted-foreground p-3 bg-muted/50 rounded-lg">
+                        {filteredCalculations.length > 0
+                            ? `Foram encontrados ${filteredCalculations.length} cálculos para este período.`
+                            : "Nenhum cálculo encontrado para o período selecionado."
+                        }
+                    </div>
                 </div>
                 <DialogFooter>
-                    <Button onClick={handleGenerateReport} disabled={isLoading}>
+                    <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
+                    <Button onClick={handleGenerateReport} disabled={isLoading || filteredCalculations.length === 0}>
                         {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Gerar e Baixar PDF
                     </Button>
