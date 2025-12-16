@@ -1,10 +1,11 @@
-
 'use client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Package, Users, Handshake, Briefcase, FileText, FileSignature, Scale, Table, Globe, BookText, AreaChart, Tags, Library } from 'lucide-react';
 import Link from 'next/link';
+import { useCompany } from '@/hooks/use-company';
+import { useMemo } from 'react';
 
-const cadastroItens = [
+const allCadastroItens = [
     {
         href: '/cadastros/cfop',
         icon: <FileText className="h-8 w-8" />,
@@ -117,9 +118,26 @@ const cadastroItens = [
         description: 'Gerencie usuários, perfis e permissões de acesso.',
         color: "text-orange-600 bg-orange-100/80 group-hover:bg-orange-600 dark:bg-orange-900/40 dark:text-orange-400 dark:group-hover:bg-orange-500",
     },
-].sort((a, b) => a.label.localeCompare(b.label));
+];
 
 export default function CadastrosPage() {
+    const { companies, currentCompany } = useCompany();
+
+    const cadastroItens = useMemo(() => {
+        const activeCompany = companies.find(c => c.id === currentCompany);
+        const isAdminCompany = activeCompany?.data?.cnpj === '62.667.939/0001-61';
+
+        const filtered = allCadastroItens.filter(item => {
+            if (item.label === 'Usuários e Perfis') {
+                return isAdminCompany;
+            }
+            return true;
+        });
+
+        return filtered.sort((a, b) => a.label.localeCompare(b.label));
+
+    }, [companies, currentCompany]);
+
     return (
         <div className="space-y-6">
             <div className="space-y-1">
