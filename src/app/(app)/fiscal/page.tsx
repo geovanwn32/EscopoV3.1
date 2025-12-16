@@ -5,7 +5,7 @@ import { useState, useEffect, ChangeEvent, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { PackagePlus, Wrench, Upload, FileMinus, Receipt, MoreHorizontal, Search, Filter, Plus, FileUp, Trash2, X, Eye, Pencil } from "lucide-react";
+import { PackagePlus, Wrench, Upload, FileMinus, Receipt, MoreHorizontal, Search, Filter, Plus, FileUp, Trash2, X, Eye, Pencil, ChevronsUpDown, Check } from "lucide-react";
 import Link from "next/link";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -23,8 +23,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Partner } from "@/types/partner";
 import { useCompany } from "@/hooks/use-company";
-import { NotaFiscal, ProductItem, ServiceItem } from "@/types/fiscal";
+import { NotaFiscal, ProductItem, ServiceItem, Product, Service } from "@/types/fiscal";
 import { AuditLog, logAudit } from "@/lib/audit-log";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 
 
 const actions = [
@@ -106,6 +108,8 @@ export default function FiscalPage() {
     const [notasSaida, setNotasSaida] = useScopedData<NotaFiscal[]>('fiscal-notasSaida', []);
     const [notasServico, setNotasServico] = useScopedData<NotaFiscal[]>('fiscal-notasServico', []);
     const [partners, setPartners] = useScopedData<Partner[]>('partners', []);
+    const [products] = useScopedData<Product[]>('cadastros-produtos', []);
+    const [services] = useScopedData<Service[]>('cadastros-servicos', []);
     const [, setAuditLogs] = useScopedData<AuditLog[]>('audit-trail-logs', []);
 
 
@@ -585,6 +589,9 @@ export default function FiscalPage() {
                     onSave={handleSaveNota}
                     isReadOnly={isReadOnly}
                     editingNota={editingNota}
+                    partners={partners}
+                    products={products}
+                    services={services}
                 />
             </Dialog>
             <RejectedFilesDialog 
@@ -876,16 +883,20 @@ interface LancamentoDialogProps {
     onSave: (data: any) => void;
     isReadOnly: boolean;
     editingNota: NotaFiscal | null;
+    partners: Partner[];
+    products: Product[];
+    services: Service[];
 }
 
 
-function LancamentoDialog({ onOpenChange, tipoNota, initialData, onSave, isReadOnly, editingNota }: LancamentoDialogProps) {
+function LancamentoDialog({ onOpenChange, tipoNota, initialData, onSave, isReadOnly, editingNota, partners, products, services }: LancamentoDialogProps) {
     const { toast } = useToast();
     const [productItems, setProductItems] = useState<ProductItem[]>([]);
     const [serviceItems, setServiceItems] = useState<ServiceItem[]>([]);
     const [activeSection, setActiveSection] = useState('geral');
     const [tipoNotaValue, setTipoNotaValue] = useState('');
     const [formData, setFormData] = useState<any>({});
+    const [openPartnerPopover, setOpenPartnerPopover] = useState<string | null>(null);
 
     useEffect(() => {
         const data = editingNota ? editingNota.dados : initialData;
@@ -933,6 +944,22 @@ function LancamentoDialog({ onOpenChange, tipoNota, initialData, onSave, isReadO
             }
         }));
     };
+    
+    const handlePartnerSelect = (section: 'emitente' | 'destinatario' | 'prestador' | 'tomador', partnerId: string) => {
+        const partner = partners.find(p => p.id.toString() === partnerId);
+        if (partner && !isReadOnly) {
+            setFormData((prev: any) => ({
+                ...prev,
+                [section]: {
+                    ...prev[section],
+                    cnpj: partner.document,
+                    razaoSocial: partner.name,
+                }
+            }));
+            setOpenPartnerPopover(null);
+        }
+    };
+
 
     const productSections = [
         { id: 'geral', label: 'Dados Gerais' },
@@ -959,7 +986,7 @@ function LancamentoDialog({ onOpenChange, tipoNota, initialData, onSave, isReadO
     // Product Handlers
     const handleAddProduct = () => {
         if (isReadOnly) return;
-        const newItem: ProductItem = { id: Date.now(), name: 'Novo Produto', quantity: 1, price: 0.0, total: 0.0 };
+        const newItem: ProductItem = { id: Date.now(), name: '', quantity: 1, price: 0.0, total: 0.0 };
         setProductItems(prev => [...prev, newItem]);
     };
 
@@ -985,11 +1012,26 @@ function LancamentoDialog({ onOpenChange, tipoNota, initialData, onSave, isReadO
         }));
     };
     
+    const handleProductSelect = (itemId: number, productId: string) => {
+        if(isReadOnly) return;
+        const product = products.find(p => p.id.toString() === productId);
+        if (product) {
+            setProductItems(prev => prev.map(item => {
+                if (item.id === itemId) {
+                    const updatedItem = { ...item, name: product.descricao, price: product.valor };
+                    updatedItem.total = updatedItem.quantity * updatedItem.price;
+                    return updatedItem;
+                }
+                return item;
+            }));
+        }
+    };
+
 
     // Service Handlers
     const handleAddService = () => {
         if (isReadOnly) return;
-        const newItem: ServiceItem = { id: Date.now(), name: 'Novo Serviço', value: 0.0 };
+        const newItem: ServiceItem = { id: Date.now(), name: '', value: 0.0 };
         setServiceItems(prev => [...prev, newItem]);
     };
 
@@ -1004,6 +1046,16 @@ function LancamentoDialog({ onOpenChange, tipoNota, initialData, onSave, isReadO
             item.id === id ? { ...item, [field]: value === '' ? '' : value } : item
         ));
     };
+    
+    const handleServiceSelect = (itemId: number, serviceId: string) => {
+        if(isReadOnly) return;
+        const service = services.find(s => s.id.toString() === serviceId);
+        if (service) {
+            setServiceItems(prev => prev.map(item => 
+                item.id === itemId ? { ...item, name: service.descricao, value: service.valor } : item
+            ));
+        }
+    }
     
     const handleSave = () => {
         if (tipoNotaValue === 'servico') {
@@ -1078,25 +1130,20 @@ function LancamentoDialog({ onOpenChange, tipoNota, initialData, onSave, isReadO
                      <Card>
                         <CardHeader><CardTitle>{sectionKey === 'prestador' ? '2. Dados do Prestador' : '3. Dados do Tomador'}</CardTitle></CardHeader>
                         <CardContent className="space-y-4">
-                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                <div className="space-y-2"><Label>CNPJ / CPF</Label><Input value={formData[sectionKey]?.cnpj || ''} onChange={(e) => handleInputChange(sectionKey, 'cnpj', e.target.value)} readOnly={isReadOnly}/></div>
-                                <div className="space-y-2 col-span-2"><Label>Razão Social</Label><Input value={formData[sectionKey]?.razaoSocial || ''} onChange={(e) => handleInputChange(sectionKey, 'razaoSocial', e.target.value)} readOnly={isReadOnly}/></div>
-                            </div>
-                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                <div className="space-y-2"><Label>Inscrição Municipal</Label><Input readOnly={isReadOnly}/></div>
-                                <div className="space-y-2"><Label>Email</Label><Input type="email" readOnly={isReadOnly}/></div>
-                                <div className="space-y-2"><Label>Telefone</Label><Input type="tel" readOnly={isReadOnly}/></div>
-                            </div>
-                             <Separator className="my-4"/>
-                            <p className="text-sm font-medium text-foreground">Endereço</p>
-                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                <div className="space-y-2"><Label>CEP</Label><Input readOnly={isReadOnly}/></div>
-                                <div className="space-y-2 col-span-2"><Label>Logradouro</Label><Input readOnly={isReadOnly}/></div>
-                                <div className="space-y-2"><Label>Número</Label><Input readOnly={isReadOnly}/></div>
-                                <div className="space-y-2"><Label>Complemento</Label><Input readOnly={isReadOnly}/></div>
-                                <div className="space-y-2"><Label>Bairro</Label><Input readOnly={isReadOnly}/></div>
-                                <div className="space-y-2"><Label>Cidade</Label><Input readOnly={isReadOnly}/></div>
-                                <div className="space-y-2"><Label>UF</Label><Input readOnly={isReadOnly}/></div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label>Razão Social</Label>
+                                    <PartnerSelector
+                                        partners={partners}
+                                        selectedPartnerName={formData[sectionKey]?.razaoSocial || ''}
+                                        onSelect={(partnerId) => handlePartnerSelect(sectionKey, partnerId)}
+                                        disabled={isReadOnly}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>CNPJ / CPF</Label>
+                                    <Input value={formData[sectionKey]?.cnpj || ''} onChange={(e) => handleInputChange(sectionKey, 'cnpj', e.target.value)} readOnly={isReadOnly} disabled />
+                                </div>
                             </div>
                         </CardContent>
                     </Card>
@@ -1118,7 +1165,12 @@ function LancamentoDialog({ onOpenChange, tipoNota, initialData, onSave, isReadO
                                     {serviceItems.length > 0 ? serviceItems.map((item) => (
                                         <TableRow key={item.id} className="has-[:focus-visible]:bg-muted/40">
                                             <TableCell className="font-medium">
-                                                <Input value={item.name || ''} onChange={(e) => handleServiceChange(item.id, 'name', e.target.value)} className="h-8" readOnly={isReadOnly}/>
+                                                <ServiceSelector
+                                                    services={services}
+                                                    selectedServiceName={item.name}
+                                                    onSelect={(serviceId) => handleServiceSelect(item.id, serviceId)}
+                                                    disabled={isReadOnly}
+                                                />
                                             </TableCell>
                                             <TableCell className="text-right">
                                                 <Input type="number" value={item.value || ''} onChange={(e) => handleServiceChange(item.id, 'value', e.target.value)} className="h-8 w-32 text-right" readOnly={isReadOnly}/>
@@ -1132,7 +1184,7 @@ function LancamentoDialog({ onOpenChange, tipoNota, initialData, onSave, isReadO
                                     )}
                                 </TableBody>
                             </Table>
-                            {!isReadOnly && <div className="mt-4 flex justify-end"><Button variant="outline" onClick={handleAddService}><Plus className="mr-2 h-4 w-4" /> Adicionar Serviço</Button></div>}
+                            {!isReadOnly && <div className="mt-4 flex justify-end"><Button type="button" variant="outline" onClick={handleAddService}><Plus className="mr-2 h-4 w-4" /> Adicionar Serviço</Button></div>}
                         </CardContent>
                     </Card>
                 )
@@ -1265,10 +1317,15 @@ function LancamentoDialog({ onOpenChange, tipoNota, initialData, onSave, isReadO
                             <div>
                                 <h3 className="text-lg font-medium text-foreground mb-4">{tipoNotaValue === 'entrada' ? 'Emitente' : 'Destinatário'}</h3>
                                 <div className="space-y-4">
-                                     <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 items-end">
-                                        <div className="space-y-2"><Label>CNPJ / CPF</Label><Input value={formData[sectionKey]?.cnpj || ''} onChange={(e) => handleInputChange(sectionKey, 'cnpj', e.target.value)} readOnly={isReadOnly}/></div>
-                                        <div className="space-y-2 col-span-1 md:col-span-2"><Label>Razão Social</Label><Input value={formData[sectionKey]?.razaoSocial || ''} onChange={(e) => handleInputChange(sectionKey, 'razaoSocial', e.target.value)} readOnly={isReadOnly}/></div>
-                                        <div className="space-y-2"><Label>Inscrição Estadual</Label><Input readOnly={isReadOnly}/></div>
+                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label>Razão Social</Label>
+                                            <PartnerSelector partners={partners} selectedPartnerName={formData[sectionKey]?.razaoSocial || ''} onSelect={(id) => handlePartnerSelect(sectionKey as any, id)} disabled={isReadOnly}/>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>CNPJ / CPF</Label>
+                                            <Input value={formData[sectionKey]?.cnpj || ''} disabled />
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1276,10 +1333,15 @@ function LancamentoDialog({ onOpenChange, tipoNota, initialData, onSave, isReadO
                              <div>
                                 <h3 className="text-lg font-medium text-foreground mb-4">{tipoNotaValue === 'entrada' ? 'Destinatário' : 'Emitente'}</h3>
                                 <div className="space-y-4">
-                                     <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 items-end">
-                                        <div className="space-y-2"><Label >CNPJ / CPF</Label><Input value={formData[otherSectionKey]?.cnpj || ''} onChange={(e) => handleInputChange(otherSectionKey, 'cnpj', e.target.value)} readOnly={isReadOnly}/></div>
-                                        <div className="space-y-2 col-span-1 md:col-span-2"><Label>Razão Social</Label><Input value={formData[otherSectionKey]?.razaoSocial || ''} onChange={(e) => handleInputChange(otherSectionKey, 'razaoSocial', e.target.value)} readOnly={isReadOnly}/></div>
-                                        <div className="space-y-2"><Label >Inscrição Estadual</Label><Input readOnly={isReadOnly}/></div>
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label>Razão Social</Label>
+                                            <PartnerSelector partners={partners} selectedPartnerName={formData[otherSectionKey]?.razaoSocial || ''} onSelect={(id) => handlePartnerSelect(otherSectionKey as any, id)} disabled={isReadOnly}/>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>CNPJ / CPF</Label>
+                                            <Input value={formData[otherSectionKey]?.cnpj || ''} disabled />
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -1305,7 +1367,7 @@ function LancamentoDialog({ onOpenChange, tipoNota, initialData, onSave, isReadO
                                     {productItems.length > 0 ? productItems.map((item) => (
                                         <TableRow key={item.id} className="has-[:focus-visible]:bg-muted/40">
                                             <TableCell className="font-medium">
-                                                <Input value={item.name} onChange={(e) => handleProductChange(item.id, 'name', e.target.value)} className="h-8" readOnly={isReadOnly}/>
+                                                <ProductSelector products={products} selectedProductName={item.name} onSelect={(id) => handleProductSelect(item.id, id)} disabled={isReadOnly} />
                                             </TableCell>
                                             <TableCell>
                                                 <Input type="number" value={item.quantity} onChange={(e) => handleProductChange(item.id, 'quantity', e.target.value)} className="h-8 w-20" readOnly={isReadOnly}/>
@@ -1321,7 +1383,7 @@ function LancamentoDialog({ onOpenChange, tipoNota, initialData, onSave, isReadO
                                     )}
                                 </TableBody>
                             </Table>
-                            {!isReadOnly && <div className="mt-4 flex justify-end"><Button variant="outline" onClick={handleAddProduct}><Plus className="mr-2 h-4 w-4" /> Adicionar Produto</Button></div>}
+                            {!isReadOnly && <div className="mt-4 flex justify-end"><Button type="button" variant="outline" onClick={handleAddProduct}><Plus className="mr-2 h-4 w-4" /> Adicionar Produto</Button></div>}
                         </CardContent>
                     </Card>
                 )
@@ -1499,4 +1561,74 @@ function LancamentoDialog({ onOpenChange, tipoNota, initialData, onSave, isReadO
     );
 }
 
+const PartnerSelector = ({ partners, selectedPartnerName, onSelect, disabled }: { partners: Partner[], selectedPartnerName: string, onSelect: (id: string) => void, disabled: boolean }) => {
+    const [open, setOpen] = useState(false);
+    return (
+        <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+                <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between" disabled={disabled}>
+                    {selectedPartnerName || "Selecione o parceiro..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                <Command><CommandInput placeholder="Pesquisar..." /><CommandList><CommandEmpty>Nenhum parceiro.</CommandEmpty><CommandGroup>
+                    {partners.map((p) => (
+                        <CommandItem key={p.id} value={p.name} onSelect={() => { onSelect(p.id.toString()); setOpen(false); }}>
+                            <Check className={cn("mr-2 h-4 w-4", selectedPartnerName === p.name ? "opacity-100" : "opacity-0")} />
+                            {p.name}
+                        </CommandItem>
+                    ))}
+                </CommandGroup></CommandList></Command>
+            </PopoverContent>
+        </Popover>
+    );
+};
 
+const ProductSelector = ({ products, selectedProductName, onSelect, disabled }: { products: Product[], selectedProductName: string, onSelect: (id: string) => void, disabled: boolean }) => {
+    const [open, setOpen] = useState(false);
+    return (
+        <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+                <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between h-8" disabled={disabled}>
+                    <span className='truncate'>{selectedProductName || "Selecione..."}</span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                <Command><CommandInput placeholder="Pesquisar..." /><CommandList><CommandEmpty>Nenhum produto.</CommandEmpty><CommandGroup>
+                    {products.map((p) => (
+                        <CommandItem key={p.id} value={p.descricao} onSelect={() => { onSelect(p.id.toString()); setOpen(false); }}>
+                            <Check className={cn("mr-2 h-4 w-4", selectedProductName === p.descricao ? "opacity-100" : "opacity-0")} />
+                            {p.descricao}
+                        </CommandItem>
+                    ))}
+                </CommandGroup></CommandList></Command>
+            </PopoverContent>
+        </Popover>
+    );
+};
+
+const ServiceSelector = ({ services, selectedServiceName, onSelect, disabled }: { services: Service[], selectedServiceName: string, onSelect: (id: string) => void, disabled: boolean }) => {
+    const [open, setOpen] = useState(false);
+    return (
+        <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+                <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between h-8" disabled={disabled}>
+                     <span className='truncate'>{selectedServiceName || "Selecione..."}</span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                <Command><CommandInput placeholder="Pesquisar..." /><CommandList><CommandEmpty>Nenhum serviço.</CommandEmpty><CommandGroup>
+                    {services.map((s) => (
+                        <CommandItem key={s.id} value={s.descricao} onSelect={() => { onSelect(s.id.toString()); setOpen(false); }}>
+                            <Check className={cn("mr-2 h-4 w-4", selectedServiceName === s.descricao ? "opacity-100" : "opacity-0")} />
+                            {s.descricao}
+                        </CommandItem>
+                    ))}
+                </CommandGroup></CommandList></Command>
+            </PopoverContent>
+        </Popover>
+    );
+};
