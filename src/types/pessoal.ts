@@ -1,5 +1,6 @@
 
 
+
 export interface Dependente {
     id: number;
     nome: string;
@@ -61,10 +62,23 @@ export interface Funcionario {
 }
 
 
+export type RubricaType = 'Provento' | 'Desconto' | 'Base' | 'Informativa';
+
+export interface Incidencia {
+    inss: boolean;
+    irrf: boolean;
+    fgts: boolean;
+    contribuicaoSindical: boolean;
+}
+
 export interface Rubrica {
     id: number;
-    label: string;
-    value: number;
+    codigo: string;
+    descricao: string;
+    tipo: RubricaType;
+    incidencias: Incidencia;
+    label?: string; // for manual entries in calculator
+    value?: number; // for manual entries in calculator
 }
 
 export interface CalculationResult {
@@ -98,4 +112,5 @@ export interface SavedCalculation {
     horasExtras100?: number;
     calculation?: CalculationResult | null;
 }
+
 
