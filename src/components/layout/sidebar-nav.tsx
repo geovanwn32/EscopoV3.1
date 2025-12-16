@@ -162,10 +162,12 @@ export function SidebarNav() {
         <TooltipProvider delayDuration={0}>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" className={cn("w-full h-12 justify-start", !open && "justify-center")}>
-                  <LifeBuoy className="h-5 w-5" />
-                  <span className={cn("ml-3 transition-all", !open && "hidden")}>Suporte</span>
-              </Button>
+              <Link href="/suporte">
+                <Button variant={isNavItemActive('/suporte') ? 'secondary' : 'ghost'} className={cn("w-full h-12 justify-start", !open && "justify-center")}>
+                    <LifeBuoy className="h-5 w-5" />
+                    <span className={cn("ml-3 transition-all", !open && "hidden")}>Suporte</span>
+                </Button>
+              </Link>
             </TooltipTrigger>
             {!open && <TooltipContent side="right">Suporte</TooltipContent>}
           </Tooltip>

@@ -55,4 +55,5 @@ export const NAV_TITLES: Record<string, string> = {
   '/utilitarios/gov-status': 'Status de Serviços do Governo',
   '/configuracoes': 'Configurações',
   '/admin': 'Painel de Administração',
+  '/suporte': 'Suporte',
 };
