@@ -231,135 +231,108 @@ export default function RciCalculator() {
         if (!calculation || !selectedSocio || !activeCompany) return;
     
         const doc = new jsPDF();
-    
-        const drawReceipt = (startY: number) => {
-            let finalY = startY;
-            const pageMargin = 14;
-    
-            // Header
-            if (activeCompany.data?.logo) {
-                try { doc.addImage(activeCompany.data.logo, 'PNG', pageMargin, finalY, 20, 20); } 
-                catch (e) { console.error("Error adding logo to PDF:", e); }
+        const pageMargin = 15;
+        let finalY = 20;
+
+        // Header
+        if (activeCompany.data?.logo) {
+            try { doc.addImage(activeCompany.data.logo, 'PNG', pageMargin, finalY, 25, 25); } 
+            catch (e) { console.error("Error adding logo to PDF:", e); }
+        }
+        
+        doc.setFontSize(18);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Recibo de Pagamento de Pró-labore', doc.internal.pageSize.width - pageMargin, finalY + 8, { align: 'right' });
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Competência: ${mesCompetencia}`, doc.internal.pageSize.width - pageMargin, finalY + 16, { align: 'right' });
+
+        finalY += 45;
+
+        // Company and Partner Info
+        autoTable(doc, {
+            startY: finalY,
+            theme: 'plain',
+            styles: { fontSize: 9, cellPadding: 1 },
+            body: [
+                [{ content: 'Empresa Pagadora (Fonte)', styles: { fontStyle: 'bold' } }, { content: 'Sócio / Beneficiário', styles: { fontStyle: 'bold' } }],
+                [`Razão Social: ${activeCompany.data?.razaoSocial || activeCompany.name}`, `Nome: ${selectedSocio.nome}`],
+                [`CNPJ: ${activeCompany.data?.cnpj || ''}`, `CPF: ${selectedSocio.cpf}`],
+                [`Endereço: ${activeCompany.data?.logradouro || ''}, ${activeCompany.data?.numero || ''}`, `NIT/PIS: ${selectedSocio.nit || 'Não informado'}`],
+            ],
+        });
+        finalY = (doc as any).lastAutoTable.finalY + 10;
+        
+        // Main Content Table
+        const mainTableBody = [
+            ...calculation.proventos.map((p, i) => [`10${i + 1}`, p.label, formatCurrencyNoSymbol(p.value), '']),
+            ...calculation.descontos.map((d, i) => [`20${i + 1}`, d.label, '', formatCurrencyNoSymbol(d.value)]),
+        ];
+
+        autoTable(doc, {
+            startY: finalY,
+            head: [['Código', 'Descrição', 'Proventos (R$)', 'Descontos (R$)']],
+            body: mainTableBody,
+            theme: 'striped',
+            headStyles: { fillColor: [41, 128, 185], textColor: 255, fontStyle: 'bold' },
+            columnStyles: {
+                0: { cellWidth: 20 },
+                1: { cellWidth: 'auto' },
+                2: { halign: 'right', cellWidth: 40 },
+                3: { halign: 'right', cellWidth: 40 }
             }
-            doc.setFontSize(14);
-            doc.setFont('helvetica', 'bold');
-            doc.text('Recibo de Pagamento de Pró-labore', doc.internal.pageSize.width / 2, finalY + 8, { align: 'center' });
-            doc.setFontSize(10);
-            doc.setFont('helvetica', 'normal');
-            doc.text(`Competência: ${mesCompetencia}`, doc.internal.pageSize.width / 2, finalY + 14, { align: 'center' });
-    
-            finalY += 25;
-    
-            // Company and Partner Info Tables
-            autoTable(doc, {
-                startY: finalY,
-                theme: 'plain',
-                styles: { fontSize: 8, cellPadding: 0.5 },
-                body: [
-                    [{ content: 'Empresa Pagadora (Fonte)', styles: { fontStyle: 'bold' } }],
-                    [{ content: `Razão Social: ${activeCompany.data?.razaoSocial || activeCompany.name}` }],
-                    [{ content: `CNPJ: ${activeCompany.data?.cnpj || ''}` }],
+        });
+        finalY = (doc as any).lastAutoTable.finalY;
+        
+        // Summary Table
+        autoTable(doc, {
+            startY: finalY,
+            theme: 'grid',
+            body: [
+                [
+                    { content: 'Totais:', colSpan: 2, styles: { halign: 'right', fontStyle: 'bold' } },
+                    { content: formatCurrencyNoSymbol(calculation.totalProventos), styles: { halign: 'right', fontStyle: 'bold' } },
+                    { content: formatCurrencyNoSymbol(calculation.totalDescontos), styles: { halign: 'right', fontStyle: 'bold' } },
                 ],
-            });
-    
-            autoTable(doc, {
-                startY: finalY,
-                theme: 'plain',
-                styles: { fontSize: 8, cellPadding: 0.5 },
-                body: [
-                    [{ content: 'Sócio / Beneficiário', styles: { fontStyle: 'bold' } }],
-                    [{ content: `Nome: ${selectedSocio.nome}` }],
-                    [{ content: `CPF: ${selectedSocio.cpf}` }],
-                    [{ content: `NIT/PIS: ${selectedSocio.nit || 'Não informado'}` }],
-                ],
-                margin: { left: doc.internal.pageSize.width / 2 }
-            });
-    
-            finalY = (doc as any).lastAutoTable.finalY + 3;
+                [
+                    { content: 'Valor Líquido:', colSpan: 3, styles: { halign: 'right', fontStyle: 'bold', fillColor: [236, 240, 241] } },
+                    { content: formatCurrency(calculation.liquido), styles: { halign: 'right', fontStyle: 'bold', fontSize: 11, fillColor: [236, 240, 241] } },
+                ]
+            ],
+            bodyStyles: { fontSize: 9 },
+        });
+        finalY = (doc as any).lastAutoTable.finalY + 15;
 
-            // Main Content Table
-            const mainTableBody = [
-                ...calculation.proventos.map((p, i) => [`10${i + 1}`, p.label, formatCurrencyNoSymbol(p.value), '']),
-                ...calculation.descontos.map((d, i) => [`20${i + 1}`, d.label, '', formatCurrencyNoSymbol(d.value)]),
-            ];
-    
-            autoTable(doc, {
-                startY: finalY,
-                head: [['Código', 'Descrição', 'Proventos', 'Descontos']],
-                body: mainTableBody,
-                theme: 'grid',
-                headStyles: { fillColor: [240, 240, 240], textColor: 40, fontStyle: 'bold', fontSize: 8, cellPadding: 1 },
-                bodyStyles: { fontSize: 8, cellPadding: 1 },
-                columnStyles: {
-                    0: { cellWidth: 20 },
-                    1: { cellWidth: 'auto' },
-                    2: { halign: 'right', textColor: [22, 163, 74], cellWidth: 35 },
-                    3: { halign: 'right', textColor: [220, 38, 38], cellWidth: 35 }
-                }
-            });
-            finalY = (doc as any).lastAutoTable.finalY;
+        // Bases
+        autoTable(doc, {
+            startY: finalY,
+            theme: 'plain',
+            head: [['Resumo das Bases de Cálculo']],
+            headStyles: { fontStyle: 'bold' },
+            body: [
+                [`Base de Cálculo INSS: ${formatCurrency(calculation.baseInss)}`],
+                [`Base de Cálculo IRRF: ${formatCurrency(calculation.baseIrrf)}`],
+            ],
+            bodyStyles: { fontSize: 8 },
+        });
+        finalY = (doc as any).lastAutoTable.finalY + 15;
+        
+        // Legal text
+        doc.setFontSize(8);
+        doc.setTextColor(100);
+        doc.text(
+            `Declaro ter recebido de ${activeCompany.data?.razaoSocial || activeCompany.name} a importância líquida de ${formatCurrency(calculation.liquido)} referente ao pagamento de pró-labore da competência de ${mesCompetencia}, dando plena e total quitação do mesmo.`,
+            pageMargin, finalY,
+            { maxWidth: doc.internal.pageSize.width - pageMargin * 2, align: 'justify' }
+        );
+        finalY += 25;
 
-             // Summary Table
-            autoTable(doc, {
-                startY: finalY,
-                theme: 'grid',
-                body: [
-                    [
-                        { content: 'Totais:', colSpan: 2, styles: { halign: 'right', fontStyle: 'bold' } },
-                        { content: formatCurrencyNoSymbol(calculation.totalProventos), styles: { halign: 'right', fontStyle: 'bold', textColor: [22, 163, 74] } },
-                        { content: formatCurrencyNoSymbol(calculation.totalDescontos), styles: { halign: 'right', fontStyle: 'bold', textColor: [220, 38, 38] } },
-                    ],
-                    [
-                        { content: 'Valor Líquido:', colSpan: 3, styles: { halign: 'right', fontStyle: 'bold', cellPadding: 1.5 } },
-                        { content: formatCurrency(calculation.liquido), styles: { halign: 'right', fontStyle: 'bold', cellPadding: 1.5, fontSize: 9 } },
-                    ]
-                ],
-                bodyStyles: { fontSize: 8, cellPadding: 1 },
-            });
-            finalY = (doc as any).lastAutoTable.finalY;
+        // Signature line
+        const signatureX = doc.internal.pageSize.width / 2;
+        doc.line(signatureX - 40, finalY, signatureX + 40, finalY);
+        doc.text(selectedSocio.nome, signatureX, finalY + 5, { align: 'center' });
+        doc.text('Assinatura do Beneficiário', signatureX, finalY + 10, { align: 'center' });
 
-            // Bases
-            autoTable(doc, {
-                startY: finalY,
-                theme: 'plain',
-                body: [[
-                    `Base INSS: ${formatCurrency(calculation.baseInss)}`,
-                    `Base IRRF: ${formatCurrency(calculation.baseIrrf)}`,
-                ]],
-                bodyStyles: { fontSize: 6, textColor: 100, cellPadding: 0.5 },
-            });
-            finalY = (doc as any).lastAutoTable.finalY + 1;
-    
-            // Legal text
-            doc.setFontSize(6);
-            doc.setTextColor(150);
-            doc.text(
-                "Declaro ter recebido o valor líquido descrito neste recibo, dando plena e total quitação do mesmo.",
-                pageMargin, finalY,
-                { maxWidth: doc.internal.pageSize.width - pageMargin * 2, align: 'justify' }
-            );
-            finalY += 4;
-            
-            // Signature lines
-            autoTable(doc, {
-                startY: finalY,
-                theme: 'plain',
-                body: [
-                    [
-                        { content: `\n\n___________________________________\n${selectedSocio.nome}\nBeneficiário (Sócio)`, styles: { halign: 'center' } },
-                        { content: `\n\n___________________________________\n${activeCompany.data?.razaoSocial || activeCompany.name}\nPagador (Empresa)`, styles: { halign: 'center' } }
-                    ]
-                ],
-                styles: { fontSize: 7, cellPadding: 0.5 }
-            });
-        };
-    
-        drawReceipt(10);
-        doc.setLineDash([2, 2], 0);
-        doc.line(10, doc.internal.pageSize.height / 2, 200, doc.internal.pageSize.height / 2); // Center line
-        doc.setLineDash([], 0);
-        drawReceipt(doc.internal.pageSize.height / 2 + 5);
-    
         doc.save(`RCI_${selectedSocio.nome.replace(/\s/g, '_')}_${mesCompetencia.replace('/', '-')}.pdf`);
     };
 
@@ -554,4 +527,5 @@ export default function RciCalculator() {
         </div>
     );
 }
+
 
