@@ -2,7 +2,7 @@
 'use client';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Calculator, CalendarOff, HandCoins, UserMinus, Briefcase, Users, FileText, PiggyBank, FolderKanban } from 'lucide-react';
+import { Calculator, CalendarOff, HandCoins, UserMinus, Briefcase, Users, FileText, PiggyBank, FolderKanban, AlertTriangle, ArrowRightCircle } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import RecentCalculations from './recent-calculations';
@@ -12,6 +12,9 @@ import { useMemo, useState } from 'react';
 import { Funcionario, SavedCalculation } from '@/types/pessoal';
 import PayrollKpiCard from './PayrollKpiCard';
 import PayrollEvolutionChart from './PayrollEvolutionChart';
+import { addDays, differenceInDays, isBefore } from 'date-fns';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { cn } from '@/lib/utils';
 
 
 const calculators = [
@@ -50,6 +53,8 @@ export default function PessoalPage() {
     const { useScopedData } = useCompany();
     const [savedCalculations] = useScopedData<SavedCalculation[]>('pessoal-calculos-salvos', []);
     const [funcionarios] = useScopedData<Funcionario[]>('cadastros-funcionarios', []);
+    const [period, setPeriod] = useState<"6" | "8" | "12">("8");
+
 
     const kpiData = useMemo(() => {
         const lastMonth = new Date();
@@ -71,7 +76,7 @@ export default function PessoalPage() {
     }, [savedCalculations, funcionarios]);
 
     const chartData = useMemo(() => {
-        const numMonths = 6;
+        const numMonths = parseInt(period);
         const months = Array.from({ length: numMonths }, (_, i) => {
             const d = new Date();
             d.setDate(1);
@@ -79,7 +84,8 @@ export default function PessoalPage() {
             return { 
                 month: d.toLocaleString('default', { month: 'short' }), 
                 year: d.getFullYear(), 
-                totalCost: 0 
+                proventos: 0,
+                descontos: 0,
             };
         }).reverse();
     
@@ -90,14 +96,57 @@ export default function PessoalPage() {
                 const monthStr = monthDate.toLocaleString('default', { month: 'short' });
                 const monthData = months.find(m => m.month === monthStr && m.year === parseInt(calcYear));
                 
-                if (monthData) {
-                    monthData.totalCost += c.netValue;
+                if (monthData && c.calculation) {
+                    monthData.proventos += c.calculation.totalProventos;
+                    monthData.descontos += c.calculation.totalDescontos;
                 }
             }
         });
     
-        return months.map(({ month, totalCost }) => ({ month, totalCost }));
-    }, [savedCalculations]);
+        return months.map(({ month, proventos, descontos }) => ({ month, proventos, descontos }));
+    }, [savedCalculations, period]);
+    
+    const notifications = useMemo(() => {
+        const today = new Date();
+        const upcomingVacations = funcionarios.map(f => {
+            const admissionDate = new Date(f.dataAdmissao);
+            const oneYearAgo = new Date(today);
+            oneYearAgo.setFullYear(today.getFullYear() - 1);
+            
+            if (isBefore(admissionDate, oneYearAgo)) {
+                 const daysSinceAdmission = differenceInDays(today, admissionDate);
+                 const vacationPeriods = Math.floor(daysSinceAdmission / 365);
+                 const nextDueDate = addDays(admissionDate, (vacationPeriods + 1) * 365 - 30);
+                
+                if(isBefore(nextDueDate, today)) {
+                    return {
+                        id: `vac-${f.id}`,
+                        type: 'vacation-due' as const,
+                        title: `Férias Vencidas`,
+                        description: `As férias de ${f.nome} estão vencidas.`,
+                        priority: 'urgent' as const,
+                        link: `/funcionarios`,
+                    }
+                } else if(differenceInDays(nextDueDate, today) <= 30) {
+                     return {
+                        id: `vac-${f.id}`,
+                        type: 'vacation-upcoming' as const,
+                        title: `Férias a Vencer`,
+                        description: `As férias de ${f.nome} vencem em ${differenceInDays(nextDueDate, today)} dias.`,
+                        priority: 'warning' as const,
+                        link: `/funcionarios`,
+                    }
+                }
+            }
+            return null;
+        }).filter(Boolean);
+
+        return upcomingVacations;
+    }, [funcionarios]);
+
+     const getNotificationIcon = (priority: 'urgent' | 'warning') => {
+        return <AlertTriangle className={cn("h-6 w-6", priority === 'urgent' ? 'text-destructive' : 'text-amber-500')} />;
+    };
 
 
     return (
@@ -120,17 +169,55 @@ export default function PessoalPage() {
                 <Card className="md:col-span-2">
                     <CardHeader>
                         <CardTitle>Evolução da Folha de Pagamento</CardTitle>
-                        <CardDescription>Custo total da folha (líquido) nos últimos 6 meses.</CardDescription>
+                        <CardDescription>Proventos e Descontos dos últimos meses.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <PayrollEvolutionChart data={chartData} />
+                        <PayrollEvolutionChart data={chartData} period={period} onPeriodChange={setPeriod} />
                     </CardContent>
                 </Card>
-                <div className="space-y-6">
+                 <div className="space-y-6">
                     <Card>
                         <CardHeader>
+                            <CardTitle className="flex items-center justify-between">
+                                <span>Avisos & Lembretes</span>
+                                 {notifications.length > 0 && (
+                                    <span className="flex items-center text-sm font-medium text-muted-foreground">
+                                        <AlertTriangle className="mr-2 h-4 w-4 text-amber-500" />
+                                        {notifications.length} Pendência(s)
+                                    </span>
+                                )}
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="h-[150px]">
+                            {notifications.length > 0 ? (
+                                <ScrollArea className="h-full">
+                                    <div className="space-y-3">
+                                    {notifications.map(notification => (
+                                        <div key={notification!.id} className="flex items-center gap-4 rounded-lg border p-3">
+                                            {getNotificationIcon(notification!.priority)}
+                                            <div className="flex-1">
+                                                <p className="font-semibold text-sm">{notification!.title}</p>
+                                                <p className="text-xs text-muted-foreground">{notification!.description}</p>
+                                            </div>
+                                            <Button variant="ghost" size="icon" asChild>
+                                                <Link href={notification!.link}>
+                                                    <ArrowRightCircle className="h-5 w-5 text-muted-foreground" />
+                                                </Link>
+                                            </Button>
+                                        </div>
+                                    ))}
+                                    </div>
+                                </ScrollArea>
+                            ) : (
+                                <div className="flex h-full flex-col items-center justify-center text-center text-muted-foreground">
+                                    <p>Nenhum aviso no momento.</p>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                     <Card>
+                        <CardHeader>
                             <CardTitle>Acesso Rápido</CardTitle>
-                            <CardDescription>Principais ações do módulo.</CardDescription>
                         </CardHeader>
                         <CardContent className="grid grid-cols-1 gap-2">
                             <Button asChild size="lg">
@@ -139,14 +226,7 @@ export default function PessoalPage() {
                             <Button asChild size="lg" variant="outline">
                                  <Link href="/funcionarios"><Users className="mr-2 h-5 w-5" /> Gerenciar Funcionários</Link>
                             </Button>
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Relatórios</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <ReportGeneratorDialog />
+                             <ReportGeneratorDialog />
                         </CardContent>
                     </Card>
                 </div>
