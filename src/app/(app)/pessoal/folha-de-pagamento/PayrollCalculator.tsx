@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCompany } from '@/hooks/use-company';
 import { Funcionario } from '@/types/pessoal';
-import { Info, Calendar as CalendarIcon, MoreHorizontal, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Filter, Search, Check, ChevronsUpDown, Calculator, Save, FileDown } from 'lucide-react';
+import { Info, Calendar as CalendarIcon, MoreHorizontal, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Filter, Search, Check, ChevronsUpDown, Calculator, Save, FileDown, Trash2 } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHeader, TableRow, TableHead, TableFooter } from '@/components/ui/table';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Checkbox } from '@/components/ui/checkbox';
