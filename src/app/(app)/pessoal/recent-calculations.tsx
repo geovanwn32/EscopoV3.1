@@ -12,8 +12,9 @@ import { useState, useMemo } from 'react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { History, MoreVertical, FileDown, Pencil, Trash2, Search, Calculator, FileText, HandCoins } from 'lucide-react';
+import { History, MoreVertical, FileDown, Pencil, Trash2, Search, Calculator, HandCoins, Eye, FileText } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import ViewCalculationDialog from './view-calculation-dialog';
 
 export default function RecentCalculations() {
     const router = useRouter();
@@ -22,6 +23,7 @@ export default function RecentCalculations() {
     const { toast } = useToast();
     
     const [itemToDelete, setItemToDelete] = useState<SavedCalculation | null>(null);
+    const [itemToView, setItemToView] = useState<SavedCalculation | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 5;
@@ -52,7 +54,8 @@ export default function RecentCalculations() {
 
     const filteredCalculations = useMemo(() => {
         return savedCalculations.filter(calc => 
-            (calc.socioName || calc.employeeName || '').toLowerCase().includes(searchTerm.toLowerCase())
+            (calc.socioName || calc.employeeName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (calc.type || '').toLowerCase().includes(searchTerm.toLowerCase())
         );
     }, [savedCalculations, searchTerm]);
 
@@ -89,7 +92,7 @@ export default function RecentCalculations() {
                          <div className="relative w-full sm:w-auto sm:max-w-xs">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             <Input 
-                                placeholder="Buscar por nome..." 
+                                placeholder="Buscar por nome ou tipo..." 
                                 className="pl-10"
                                 value={searchTerm}
                                 onChange={(e) => {setSearchTerm(e.target.value); setCurrentPage(1);}}
@@ -113,12 +116,14 @@ export default function RecentCalculations() {
                             <TableBody>
                                 {paginatedCalculations.length > 0 ? (
                                     paginatedCalculations.map(calc => (
-                                        <TableRow key={calc.id} onDoubleClick={() => handleEdit(calc)} className="cursor-pointer">
+                                        <TableRow key={calc.id} >
                                             <TableCell>{format(new Date(calc.date), 'dd/MM/yyyy')}</TableCell>
                                             <TableCell>{calc.mesCompetencia}</TableCell>
-                                            <TableCell className='flex items-center gap-2'>
-                                                {getCalcIcon(calc.type)}
-                                                {calc.type}
+                                            <TableCell>
+                                                <div className='flex items-center gap-2'>
+                                                    {getCalcIcon(calc.type)}
+                                                    {calc.type}
+                                                </div>
                                             </TableCell>
                                             <TableCell className="font-medium">{calc.socioName || calc.employeeName}</TableCell>
                                             <TableCell className="text-right font-mono">{calc.netValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
@@ -128,6 +133,9 @@ export default function RecentCalculations() {
                                                         <Button variant="ghost" size="icon"><MoreVertical className="h-4 w-4" /></Button>
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent align="end">
+                                                         <DropdownMenuItem onClick={() => setItemToView(calc)}>
+                                                            <Eye className="mr-2 h-4 w-4" /> Visualizar
+                                                        </DropdownMenuItem>
                                                          <DropdownMenuItem onClick={() => handleEdit(calc)}>
                                                             <Pencil className="mr-2 h-4 w-4" /> Editar
                                                         </DropdownMenuItem>
@@ -190,6 +198,14 @@ export default function RecentCalculations() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+            
+            {itemToView && (
+                <ViewCalculationDialog
+                    calculation={itemToView}
+                    open={!!itemToView}
+                    onOpenChange={() => setItemToView(null)}
+                />
+            )}
         </>
     )
 }
