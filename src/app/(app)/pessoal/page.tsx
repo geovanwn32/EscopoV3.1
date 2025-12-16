@@ -295,33 +295,75 @@ function ReportGeneratorDialog() {
                     format(new Date(calc.date), 'dd/MM/yyyy'),
                     calc.type,
                     calc.socioName || calc.employeeName || 'N/A',
+                    (calc.calculation?.totalProventos || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+                    (calc.calculation?.totalDescontos || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
                     calc.netValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
                 ]));
 
                 autoTable(doc, {
                     startY: finalY,
-                    head: [['Data', 'Tipo', 'Nome', 'Valor Líquido']],
+                    head: [['Data', 'Tipo', 'Nome', 'T. Proventos', 'T. Descontos', 'Vlr. Líquido']],
                     body: tableData,
                     theme: 'grid',
                     headStyles: { fillColor: [240, 240, 240], textColor: 40, fontStyle: 'bold' },
+                    columnStyles: {
+                        3: { halign: 'right' },
+                        4: { halign: 'right' },
+                        5: { halign: 'right' },
+                    }
                 });
                 
                 finalY = (doc as any).lastAutoTable.finalY + 10;
                 
-                const totalFolha = filteredCalculations.filter(c => c.type === 'Folha').reduce((sum, c) => sum + c.netValue, 0);
-                const totalRci = filteredCalculations.filter(c => c.type === 'RCI').reduce((sum, c) => sum + c.netValue, 0);
-                const totalGeral = totalFolha + totalRci;
+                const totals = filteredCalculations.reduce((acc, c) => {
+                    const calc = c.calculation;
+                    if (calc) {
+                        acc.proventos += calc.totalProventos;
+                        acc.descontos += calc.totalDescontos;
+                        acc.liquido += calc.liquido;
+                        
+                        const inss = calc.descontos.find(d => d.label.includes('INSS'))?.value || 0;
+                        const irrf = calc.descontos.find(d => d.label.includes('IRRF'))?.value || 0;
+                        
+                        acc.inss += inss;
+                        acc.irrf += irrf;
+                        acc.fgts += c.type === 'Folha' ? (calc.baseInss * 0.08) : 0;
+                    }
+                    return acc;
+                }, { proventos: 0, descontos: 0, liquido: 0, inss: 0, irrf: 0, fgts: 0 });
+
 
                 autoTable(doc, {
                     startY: finalY,
                     theme: 'plain',
                     styles: { fontSize: 10 },
                     body: [
-                        ['Total Folha de Pagamento:', totalFolha.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })],
-                        ['Total Pró-labore (RCI):', totalRci.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })],
-                        [{ content: 'Total Geral do Mês:', styles: {fontStyle: 'bold'} }, { content: totalGeral.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), styles: {fontStyle: 'bold'} }],
+                        ['Total Proventos:', totals.proventos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })],
+                        ['Total Descontos:', totals.descontos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })],
+                        [{ content: 'Total Líquido:', styles: {fontStyle: 'bold'} }, { content: totals.liquido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), styles: {fontStyle: 'bold'} }],
                     ]
                 });
+                finalY = (doc as any).lastAutoTable.finalY + 5;
+                
+                autoTable(doc, {
+                    startY: finalY,
+                    theme: 'plain',
+                    styles: { fontSize: 8, cellPadding: 0.5 },
+                    body: [
+                       [{content: "Resumo de Impostos (Guias)", styles: {fontStyle: 'bold'}}],
+                       [`INSS: ${totals.inss.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`],
+                       [`IRRF: ${totals.irrf.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`],
+                       [`FGTS: ${totals.fgts.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`],
+                    ]
+                });
+                finalY = (doc as any).lastAutoTable.finalY + 10;
+                
+                doc.setFontSize(8);
+                doc.setTextColor(150);
+                doc.text(
+                    'Este documento é um resumo gerencial. Os valores dos impostos são estimativas e devem ser validados nas respectivas guias de recolhimento.',
+                    pageMargin, finalY, { maxWidth: doc.internal.pageSize.width - pageMargin * 2 }
+                );
 
                 doc.save(`Relatorio_Calculos_${mesCompetencia.replace('-', '_')}.pdf`);
                 toast({ title: 'Relatório Gerado!', description: 'O PDF foi baixado com sucesso.' });
