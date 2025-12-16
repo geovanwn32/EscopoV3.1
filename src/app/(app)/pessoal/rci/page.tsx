@@ -1,7 +1,5 @@
+
 import RciCalculator from "./RciCalculator";
-import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
-import Link from "next/link";
 
 export default function RciPage() {
     return (
@@ -10,4 +8,5 @@ export default function RciPage() {
       </div>
     );
   }
+
 

@@ -64,6 +64,7 @@ export default function RciCalculator() {
     const { toast } = useToast();
     const { useScopedData, companies, currentCompany } = useCompany();
     const [socios] = useScopedData<Socio[]>('cadastros-socios', []);
+    const [rubricas] = useScopedData<Rubrica[]>('cadastros-rubricas', []);
     const [savedCalculations, setSavedCalculations] = useScopedData<SavedCalculation[]>('pessoal-calculos-salvos', []);
     
     const [isLoading, setIsLoading] = useState(false);
@@ -119,16 +120,27 @@ export default function RciCalculator() {
     const handleAddRubrica = (type: 'provento' | 'desconto') => {
         const fieldName = type === 'provento' ? 'manualProventos' : 'manualDescontos';
         const currentValues = form.getValues(fieldName) || [];
-        const newRubrica: Rubrica = { id: Date.now(), descricao: '', value: 0, codigo: '', tipo: 'Provento', incidencias: {inss: false, irrf: false, fgts: false, contribuicaoSindical: false} };
+        const newRubrica: Rubrica = { id: Date.now(), descricao: '', value: 0, codigo: 'MANUAL', tipo: type === 'provento' ? 'Provento' : 'Desconto', incidencias: {inss: false, irrf: false, fgts: false, contribuicaoSindical: false} };
         form.setValue(fieldName, [...currentValues, newRubrica]);
     };
 
-    const handleUpdateRubrica = (type: 'provento' | 'desconto', id: number, field: 'descricao' | 'value', fieldValue: string | number) => {
+    const handleUpdateRubricaValue = (type: 'provento' | 'desconto', id: number, value: number) => {
         const fieldName = type === 'provento' ? 'manualProventos' : 'manualDescontos';
         const currentValues = form.getValues(fieldName) || [];
-        const updatedValues = currentValues.map(r => r.id === id ? { ...r, [field]: fieldValue } : r);
+        const updatedValues = currentValues.map(r => r.id === id ? { ...r, value } : r);
         form.setValue(fieldName, updatedValues);
     };
+
+    const handleSelectRubrica = (type: 'provento' | 'desconto', id: number, rubricaId: string) => {
+        const selectedRubrica = rubricas.find(r => r.id.toString() === rubricaId);
+        if (!selectedRubrica) return;
+        
+        const fieldName = type === 'provento' ? 'manualProventos' : 'manualDescontos';
+        const currentValues = form.getValues(fieldName) || [];
+        const updatedValues = currentValues.map(r => r.id === id ? { ...r, ...selectedRubrica, id: r.id } : r); // Mantém o ID do item da lista
+        form.setValue(fieldName, updatedValues);
+    };
+
 
     const handleRemoveRubrica = (type: 'provento' | 'desconto', id: number) => {
         const fieldName = type === 'provento' ? 'manualProventos' : 'manualDescontos';
@@ -186,7 +198,7 @@ export default function RciCalculator() {
             ];
             
             const descontos: Rubrica[] = [
-                ...descontosCalculados,
+                ...descontosCalculados.filter(d => d.value || 0 > 0),
                 ...currentDescontos.filter(d => d.descricao && (d.value || 0) > 0),
             ];
 
@@ -413,10 +425,15 @@ export default function RciCalculator() {
                                     />
                                 </TabsContent>
                                 <TabsContent value="proventos" className="space-y-2">
-                                    {form.getValues('manualProventos')?.map((p, index) => (
+                                     {form.getValues('manualProventos')?.map((p) => (
                                         <div key={p.id} className="flex gap-2 items-center">
-                                            <Input placeholder="Descrição do provento" value={p.descricao} onChange={(e) => handleUpdateRubrica('provento', p.id, 'descricao', e.target.value)} />
-                                            <MoneyInput id={`provento-${p.id}`} value={p.value || 0} onValueChange={(val) => handleUpdateRubrica('provento', p.id, 'value', val)} />
+                                            <Select onValueChange={(rubricaId) => handleSelectRubrica('provento', p.id, rubricaId)}>
+                                                <SelectTrigger><SelectValue placeholder="Selecione a rubrica..." /></SelectTrigger>
+                                                <SelectContent>
+                                                    {rubricas.filter(r => r.tipo === 'Provento').map(rub => <SelectItem key={rub.id} value={rub.id.toString()}>{rub.descricao}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
+                                            <MoneyInput id={`provento-${p.id}`} value={p.value || 0} onValueChange={(val) => handleUpdateRubricaValue('provento', p.id, val)} />
                                             <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveRubrica('provento', p.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                                         </div>
                                     ))}
@@ -425,8 +442,13 @@ export default function RciCalculator() {
                                 <TabsContent value="descontos" className="space-y-2">
                                     {form.getValues('manualDescontos')?.map(d => (
                                         <div key={d.id} className="flex gap-2 items-center">
-                                            <Input placeholder="Descrição do desconto" value={d.descricao} onChange={(e) => handleUpdateRubrica('desconto', d.id, 'descricao', e.target.value)} />
-                                            <MoneyInput id={`desconto-${d.id}`} value={d.value || 0} onValueChange={(val) => handleUpdateRubrica('desconto', d.id, 'value', val)} />
+                                             <Select onValueChange={(rubricaId) => handleSelectRubrica('desconto', d.id, rubricaId)}>
+                                                <SelectTrigger><SelectValue placeholder="Selecione a rubrica..." /></SelectTrigger>
+                                                <SelectContent>
+                                                    {rubricas.filter(r => r.tipo === 'Desconto').map(rub => <SelectItem key={rub.id} value={rub.id.toString()}>{rub.descricao}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
+                                            <MoneyInput id={`desconto-${d.id}`} value={d.value || 0} onValueChange={(val) => handleUpdateRubricaValue('desconto', d.id, val)} />
                                             <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveRubrica('desconto', d.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                                         </div>
                                     ))}
