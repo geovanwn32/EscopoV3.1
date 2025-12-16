@@ -132,17 +132,6 @@ export default function PayrollCalculator() {
                      <div className="col-span-1 md:col-span-2 lg:col-span-2 space-y-2">
                         <Label>Período</Label>
                          <div className="flex items-center gap-2">
-                             <Select value={calculationType} onValueChange={setCalculationType}>
-                                <SelectTrigger className='w-[150px]'>
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="mensal">Folha Mensal</SelectItem>
-                                    <SelectItem value="adiantamento">Adiantamento</SelectItem>
-                                    <SelectItem value="ferias">Férias</SelectItem>
-                                    <SelectItem value="13-salario">13º Salário</SelectItem>
-                                </SelectContent>
-                            </Select>
                             <Popover>
                                 <PopoverTrigger asChild>
                                     <Button
