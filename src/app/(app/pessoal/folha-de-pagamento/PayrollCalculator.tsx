@@ -59,14 +59,12 @@ export default function PayrollCalculator() {
     return (
         <Card>
             <CardHeader>
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                    <div>
-                        <CardTitle className="text-xl flex items-center gap-2">
-                            Folha de Pagamento
-                            <Info className="h-4 w-4 text-muted-foreground cursor-pointer" />
-                        </CardTitle>
-                    </div>
-                     <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <CardTitle className="text-xl flex items-center gap-2">
+                        Folha de Pagamento
+                        <Info className="h-4 w-4 text-muted-foreground cursor-pointer" />
+                    </CardTitle>
+                    <div className="flex flex-wrap items-center gap-2">
                         <Button variant="outline" size="icon"><Plus className="h-4 w-4" /></Button>
                         <Button variant="outline" size="icon"><Copy className="h-4 w-4" /></Button>
                         <Button variant="outline" size="icon"><Trash2 className="h-4 w-4" /></Button>
@@ -77,7 +75,7 @@ export default function PayrollCalculator() {
                         <Button variant="default">PG</Button>
                     </div>
                 </div>
-                 <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-4 items-end pt-4">
+                 <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-4 pt-6">
                     <div className="col-span-1 md:col-span-2 lg:col-span-2 space-y-2">
                         <Label htmlFor="employee">Empregado</Label>
                         <Select value={selectedEmployeeId} onValueChange={setSelectedEmployeeId}>
@@ -92,7 +90,17 @@ export default function PayrollCalculator() {
                      <div className="col-span-1 md:col-span-2 lg:col-span-2 space-y-2">
                         <Label htmlFor="period">Período</Label>
                         <div className="flex items-center gap-1">
-                            <Input id="period" value="Período de: 14/06/2023 à 30/06/2023 - Mensal" readOnly />
+                            <Select defaultValue="2023-06-mensal">
+                                <SelectTrigger id="period">
+                                    <SelectValue placeholder="Selecione o período" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="2023-06-mensal">Jun/2023 - Mensal</SelectItem>
+                                    <SelectItem value="2023-06-quinzenal1">Jun/2023 - 1ª Quinzena</SelectItem>
+                                    <SelectItem value="2023-06-quinzenal2">Jun/2023 - 2ª Quinzena</SelectItem>
+                                    <SelectItem value="2023-05-mensal">Mai/2023 - Mensal</SelectItem>
+                                </SelectContent>
+                            </Select>
                              <Popover>
                                 <PopoverTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></PopoverTrigger>
                                 <PopoverContent>...</PopoverContent>
@@ -101,16 +109,16 @@ export default function PayrollCalculator() {
                             <Button variant="ghost" size="icon"><X className="h-4 w-4"/></Button>
                         </div>
                     </div>
-                     <div className="col-span-1 md:col-span-1 lg:col-span-1 space-y-2">
-                        <div className="flex items-center justify-end h-10">
-                            <p className="text-sm text-muted-foreground">01 de 1 Registro</p>
+                     <div className="col-span-2 md:col-span-2 lg:col-span-1 flex items-end justify-end">
+                         <div className="flex items-center">
+                            <p className="text-sm text-muted-foreground whitespace-nowrap">01 de 1 Registro</p>
                             <Button variant="ghost" size="icon" disabled><ChevronsLeft className="h-4 w-4" /></Button>
                             <Button variant="ghost" size="icon" disabled><ChevronLeft className="h-4 w-4" /></Button>
                              <Button variant="ghost" size="icon"><ChevronRight className="h-4 w-4" /></Button>
                              <Button variant="ghost" size="icon"><ChevronsRight className="h-4 w-4" /></Button>
                         </div>
                     </div>
-                     <div className="col-span-1 md:col-span-1 lg:col-span-1 space-y-2">
+                     <div className="col-span-1 lg:col-span-1 space-y-2">
                         <Label htmlFor="origin">Origem</Label>
                          <Select defaultValue="todas">
                             <SelectTrigger id="origin">
@@ -217,4 +225,3 @@ export default function PayrollCalculator() {
         </Card>
     );
 }
-
