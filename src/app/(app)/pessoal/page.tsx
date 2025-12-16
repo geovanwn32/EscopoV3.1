@@ -2,7 +2,7 @@
 'use client';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Calculator, CalendarOff, HandCoins, UserMinus, Percent, Briefcase, History, MoreVertical, FileDown, Pencil, Trash2 } from 'lucide-react';
+import { Calculator, CalendarOff, HandCoins, UserMinus, Percent, Briefcase, History, MoreVertical, FileDown, Pencil, Trash2, FileText, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { useCompany } from '@/hooks/use-company';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -13,7 +13,12 @@ import { SavedCalculation } from '@/types/pessoal';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const calculators = [
     {
@@ -179,19 +184,30 @@ export default function PessoalPage() {
                 </p>
             </div>
 
-             <Card>
-                <CardHeader>
-                    <CardTitle>Folha de Pagamento</CardTitle>
-                    <CardDescription>Calcule a folha de pagamento mensal de seus funcionários de forma detalhada.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <Button asChild size="lg">
-                        <Link href="/pessoal/folha-de-pagamento">
-                            <Calculator className="mr-2 h-5 w-5" /> Abrir Calculadora da Folha
-                        </Link>
-                    </Button>
-                </CardContent>
-            </Card>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Folha de Pagamento</CardTitle>
+                        <CardDescription>Calcule a folha de pagamento mensal de seus funcionários de forma detalhada.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Button asChild size="lg">
+                            <Link href="/pessoal/folha-de-pagamento">
+                                <Calculator className="mr-2 h-5 w-5" /> Abrir Calculadora da Folha
+                            </Link>
+                        </Button>
+                    </CardContent>
+                </Card>
+                 <Card>
+                    <CardHeader>
+                        <CardTitle>Relatório Mensal de Cálculos</CardTitle>
+                        <CardDescription>Gere um PDF consolidado com todos os cálculos de um determinado mês.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <ReportGeneratorDialog />
+                    </CardContent>
+                </Card>
+            </div>
 
 
             <Card>
@@ -217,4 +233,121 @@ export default function PessoalPage() {
             <RecentCalculations />
         </div>
     );
+}
+
+function ReportGeneratorDialog() {
+    const { useScopedData, companies, currentCompany } = useCompany();
+    const [savedCalculations] = useScopedData<SavedCalculation[]>('pessoal-calculos-salvos', []);
+    const { toast } = useToast();
+    const [isLoading, setIsLoading] = useState(false);
+    const [mesCompetencia, setMesCompetencia] = useState<string>(`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`);
+    const activeCompany = companies.find(c => c.id === currentCompany);
+
+    const handleGenerateReport = () => {
+        setIsLoading(true);
+        
+        const [year, month] = mesCompetencia.split('-').map(Number);
+        
+        const filteredCalculations = savedCalculations.filter(calc => {
+            const calcDate = new Date(calc.date);
+            return calcDate.getFullYear() === year && calcDate.getMonth() === month - 1;
+        });
+
+        if (filteredCalculations.length === 0) {
+            toast({
+                variant: 'destructive',
+                title: 'Nenhum cálculo encontrado',
+                description: `Não há cálculos salvos para a competência ${month}/${year}.`,
+            });
+            setIsLoading(false);
+            return;
+        }
+
+        setTimeout(() => {
+            const doc = new jsPDF();
+            const pageMargin = 15;
+            let finalY = 20;
+
+            // Header
+            doc.setFontSize(18);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Relatório Mensal de Cálculos', doc.internal.pageSize.width / 2, finalY, { align: 'center' });
+            finalY += 8;
+            doc.setFontSize(12);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`Competência: ${String(month).padStart(2, '0')}/${year}`, doc.internal.pageSize.width / 2, finalY, { align: 'center' });
+            finalY += 8;
+            doc.text(`Empresa: ${activeCompany?.name || 'N/A'}`, doc.internal.pageSize.width / 2, finalY, { align: 'center' });
+            finalY += 15;
+
+            const tableData = filteredCalculations.map(calc => ([
+                format(new Date(calc.date), 'dd/MM/yyyy'),
+                calc.type,
+                calc.socioName || calc.employeeName || 'N/A',
+                calc.netValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+            ]));
+
+            autoTable(doc, {
+                startY: finalY,
+                head: [['Data', 'Tipo', 'Nome', 'Valor Líquido']],
+                body: tableData,
+                theme: 'grid',
+            });
+            
+            finalY = (doc as any).lastAutoTable.finalY + 10;
+            
+            const totalFolha = filteredCalculations.filter(c => c.type === 'Folha').reduce((sum, c) => sum + c.netValue, 0);
+            const totalRci = filteredCalculations.filter(c => c.type === 'RCI').reduce((sum, c) => sum + c.netValue, 0);
+            const totalGeral = totalFolha + totalRci;
+
+            autoTable(doc, {
+                startY: finalY,
+                theme: 'plain',
+                body: [
+                    ['Total Folha de Pagamento:', totalFolha.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })],
+                    ['Total Pró-labore (RCI):', totalRci.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })],
+                    [{ content: 'Total Geral do Mês:', styles: {fontStyle: 'bold'} }, { content: totalGeral.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }), styles: {fontStyle: 'bold'} }],
+                ]
+            });
+
+
+            doc.save(`Relatorio_Calculos_${month}_${year}.pdf`);
+
+            setIsLoading(false);
+            toast({ title: 'Relatório Gerado!', description: 'O PDF foi baixado com sucesso.' });
+        }, 1000);
+    }
+
+    return (
+        <Dialog>
+            <DialogTrigger asChild>
+                <Button size="lg">
+                    <FileText className="mr-2 h-5 w-5" /> Gerar Relatório de Cálculos
+                </Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Gerar Relatório Mensal</DialogTitle>
+                    <DialogDescription>
+                        Selecione o mês e o ano para gerar um relatório em PDF com todos os cálculos salvos no período.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="py-4">
+                    <Label htmlFor="report-month">Mês de Competência</Label>
+                    <Input 
+                        id="report-month" 
+                        type="month" 
+                        value={mesCompetencia} 
+                        onChange={(e) => setMesCompetencia(e.target.value)} 
+                    />
+                </div>
+                <DialogFooter>
+                    <Button onClick={handleGenerateReport} disabled={isLoading}>
+                        {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Gerar e Baixar PDF
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
 }
