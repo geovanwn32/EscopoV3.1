@@ -1,22 +1,55 @@
 
-
 "use client"
 
 import { useState, useEffect } from "react"
-import { Moon, Sun, Monitor } from "lucide-react"
+import { Moon, Sun, Monitor, Bell, Trash2, Loader2 } from "lucide-react"
 import { useTheme } from "next-themes"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
+import { Separator } from "@/components/ui/separator"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
+import { Button } from "@/components/ui/button"
+import { useToast } from "@/hooks/use-toast"
 
 export default function ConfiguracoesPage() {
   const { theme, setTheme } = useTheme()
+  const { toast } = useToast()
   const [mounted, setMounted] = useState(false)
+  const [isClearing, setIsClearing] = useState(false)
+  
+  // States for notification switches - default to true
+  const [pagarNotif, setPagarNotif] = useState(true)
+  const [receberNotif, setReceberNotif] = useState(true)
+  const [sefazNotif, setSefazNotif] = useState(true)
+
 
   useEffect(() => {
     setMounted(true)
   }, [])
   
+  const handleClearCache = () => {
+    setIsClearing(true);
+    setTimeout(() => {
+        // In a real scenario, you might have more complex logic
+        // For this demo, we clear the entire localStorage.
+        // Be cautious with this in a real app with important stored data.
+        localStorage.clear();
+        sessionStorage.clear();
+        
+        toast({
+            title: "Cache Limpo!",
+            description: "O cache local foi limpo com sucesso. A página será recarregada.",
+        });
+
+        // Reload the page to apply changes
+        setTimeout(() => window.location.reload(), 1500);
+
+    }, 1000);
+  }
+
   return (
     <div className="space-y-6">
       <div className="space-y-1">
@@ -26,45 +59,115 @@ export default function ConfiguracoesPage() {
         </p>
       </div>
         
-      <Card>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        <div className="space-y-6">
+          <Card>
+              <CardHeader>
+              <CardTitle>Tema da Aplicação</CardTitle>
+              <CardDescription>Escolha como o EscopoV3 deve se parecer. A opção "Sistema" usará a preferência do seu dispositivo.</CardDescription>
+              </CardHeader>
+              <CardContent>
+              {mounted ? (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <ThemePreview 
+                    themeName="light"
+                    title="Claro"
+                    icon={<Sun className="h-5 w-5" />}
+                    isActive={theme === "light"}
+                    onClick={() => setTheme("light")}
+                  />
+                  <ThemePreview 
+                    themeName="dark"
+                    title="Escuro"
+                    icon={<Moon className="h-5 w-5" />}
+                    isActive={theme === "dark"}
+                    onClick={() => setTheme("dark")}
+                  />
+                  <ThemePreview 
+                    themeName="system"
+                    title="Sistema"
+                    icon={<Monitor className="h-5 w-5" />}
+                    isActive={theme === "system"}
+                    onClick={() => setTheme("system")}
+                  />
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    <div className="h-[120px] bg-muted rounded-lg animate-pulse" />
+                    <div className="h-[120px] bg-muted rounded-lg animate-pulse" />
+                    <div className="h-[120px] bg-muted rounded-lg animate-pulse" />
+                </div>
+              )}
+              </CardContent>
+          </Card>
+           <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Trash2 className="h-5 w-5"/> Gerenciamento de Dados</CardTitle>
+                <CardDescription>Ações relacionadas aos dados armazenados no seu navegador.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div>
+                        <Label htmlFor="clear-cache" className="font-semibold">Limpar Cache Local</Label>
+                        <p className="text-sm text-muted-foreground">Isso removerá todos os dados do EscopoV3 salvos no seu navegador. Use se estiver com problemas de exibição.</p>
+                    </div>
+                     <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="destructive" id="clear-cache">Limpar</Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Você tem certeza absoluta?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Esta ação não pode ser desfeita. Isso limpará permanentemente todos os dados de empresas, lançamentos e configurações do seu navegador. 
+                            <strong className="block mt-2">Você será desconectado após a conclusão.</strong>
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel disabled={isClearing}>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction onClick={handleClearCache} disabled={isClearing}>
+                             {isClearing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Confirmar e Limpar
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                </div>
+              </CardContent>
+            </Card>
+        </div>
+        <Card>
           <CardHeader>
-          <CardTitle>Tema da Aplicação</CardTitle>
-          <CardDescription>Escolha como o EscopoV3 deve se parecer. A opção "Sistema" usará a preferência do seu dispositivo.</CardDescription>
+            <CardTitle className="flex items-center gap-2"><Bell className="h-5 w-5"/> Preferências de Notificação</CardTitle>
+            <CardDescription>Controle quais alertas e notificações você deseja receber.</CardDescription>
           </CardHeader>
-          <CardContent>
-          {mounted ? (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <ThemePreview 
-                themeName="light"
-                title="Claro"
-                icon={<Sun className="h-5 w-5" />}
-                isActive={theme === "light"}
-                onClick={() => setTheme("light")}
-              />
-              <ThemePreview 
-                themeName="dark"
-                title="Escuro"
-                icon={<Moon className="h-5 w-5" />}
-                isActive={theme === "dark"}
-                onClick={() => setTheme("dark")}
-              />
-              <ThemePreview 
-                themeName="system"
-                title="Sistema"
-                icon={<Monitor className="h-5 w-5" />}
-                isActive={theme === "system"}
-                onClick={() => setTheme("system")}
-              />
+          <CardContent className="space-y-1">
+             <div className="flex items-center justify-between p-4">
+                <Label htmlFor="notif-receber" className="flex flex-col gap-1">
+                    <span className="font-semibold">Contas a Receber Atrasadas</span>
+                    <span className="font-normal text-muted-foreground">Alertas sobre recebimentos que passaram da data de vencimento.</span>
+                </Label>
+                <Switch id="notif-receber" checked={receberNotif} onCheckedChange={setReceberNotif} />
             </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <div className="h-[120px] bg-muted rounded-lg animate-pulse" />
-                <div className="h-[120px] bg-muted rounded-lg animate-pulse" />
-                <div className="h-[120px] bg-muted rounded-lg animate-pulse" />
+            <Separator />
+            <div className="flex items-center justify-between p-4">
+                <Label htmlFor="notif-pagar" className="flex flex-col gap-1">
+                    <span className="font-semibold">Contas a Pagar Próximas</span>
+                     <span className="font-normal text-muted-foreground">Avisos sobre contas que vencerão nos próximos 7 dias.</span>
+                </Label>
+                <Switch id="notif-pagar" checked={pagarNotif} onCheckedChange={setPagarNotif} />
             </div>
-          )}
+             <Separator />
+             <div className="flex items-center justify-between p-4">
+                <Label htmlFor="notif-sefaz" className="flex flex-col gap-1">
+                    <span className="font-semibold">Instabilidade em Serviços (Sefaz)</span>
+                     <span className="font-normal text-muted-foreground">Notificações quando um serviço da Sefaz ficar instável ou offline.</span>
+                </Label>
+                <Switch id="notif-sefaz" checked={sefazNotif} onCheckedChange={setSefazNotif} />
+            </div>
           </CardContent>
-      </Card>
+        </Card>
+      </div>
     </div>
   )
 }
