@@ -5,7 +5,7 @@ import { useState, useEffect, ChangeEvent, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { PackagePlus, Wrench, Upload, FileMinus, Receipt, MoreHorizontal, Search, Filter, Plus, FileUp, Trash2, X, Eye, Pencil, ChevronsUpDown, Check, Calculator, CalendarIcon } from "lucide-react";
+import { PackagePlus, Wrench, Upload, FileMinus, Receipt, MoreHorizontal, Search, Filter, Plus, FileUp, Trash2, X, Eye, Pencil, ChevronsUpDown, Check, Calculator, Calendar as CalendarIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from 'next/navigation';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -30,6 +30,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { format, parseISO, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { Calendar } from "@/components/ui/calendar";
 
 
 const actions = [
@@ -900,7 +901,7 @@ function NotasFiscaisTable({
     if (!data) {
         return (
             <div className="text-center py-10">
-                <p className="text-muted-foreground">Nenhuma nota de {tipo} encontrada.</p>
+                <p className="text-muted-foreground">Nenhuma nota de ${tipo} encontrada.</p>
             </div>
         );
     }
@@ -1749,5 +1750,3 @@ const ServiceSelector = ({ services, selectedServiceName, onSelect, disabled }: 
         </Popover>
     );
 };
-
-    
