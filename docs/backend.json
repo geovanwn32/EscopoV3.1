@@ -892,6 +892,51 @@
         "contaContabilId",
         "sugestao"
       ]
+    },
+    "ApuracaoImpostos": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "ApuracaoImpostos",
+      "type": "object",
+      "description": "Entidade que armazena o resultado de uma apuração de impostos para um determinado período.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Identificador único da apuração."
+        },
+        "empresaId": {
+          "type": "string",
+          "description": "Referência para a empresa a qual a apuração pertence."
+        },
+        "mesCompetencia": {
+          "type": "string",
+          "description": "Mês e ano da competência (formato MM/YYYY)."
+        },
+        "dataGeracao": {
+          "type": "string",
+          "description": "Data e hora em que a apuração foi gerada.",
+          "format": "date-time"
+        },
+        "receitaBrutaTotal": {
+          "type": "number",
+          "description": "Receita bruta total do período."
+        },
+        "impostoDevido": {
+          "type": "number",
+          "description": "Valor total do imposto devido."
+        },
+        "calculos": {
+          "type": "object",
+          "description": "Objeto com os detalhes do cálculo."
+        }
+      },
+      "required": [
+        "id",
+        "empresaId",
+        "mesCompetencia",
+        "dataGeracao",
+        "receitaBrutaTotal",
+        "impostoDevido"
+      ]
     }
   },
   "auth": {
@@ -1099,6 +1144,26 @@
           ]
         }
       },
+       {
+        "path": "/empresas/{empresaId}/apuracoes_impostos/{apuracaoId}",
+        "definition": {
+          "entityName": "ApuracaoImpostos",
+          "schema": {
+            "$ref": "#/backend/entities/ApuracaoImpostos"
+          },
+          "description": "Stores the result of a tax calculation for a specific period for a company.",
+          "params": [
+            {
+              "name": "empresaId",
+              "description": "The unique identifier for the company."
+            },
+            {
+              "name": "apuracaoId",
+              "description": "The unique identifier for the tax calculation."
+            }
+          ]
+        }
+      },
       {
         "path": "/auditoria/{auditoriaId}",
         "definition": {
@@ -1191,5 +1256,3 @@
     "reasoning": "The Firestore data structure is designed to support the ERP Contábil \"EscopoV3\" application, focusing on security, scalability, and debuggability. The design adheres to the principles of Authorization Independence, Clarity of Intent, DBAC (Database-Based Access Control), QAPs (Queries Are Not Filters), and Invariants. Authorization Independence is achieved through denormalization, specifically by including the `empresaId` in every document, enabling rules to validate access without relying on parent document data. Structural Segregation is used to maintain a homogeneous security posture within each collection. Access Modeling employs path-based ownership and membership maps for collaborative data. Data Clarity is enhanced through explicit state modeling using a dedicated `status` field and predictable schema. \n\n**Details on how Authorization Independence and QAPs are achieved:**\n\n*   **Authorization Independence:** Every document that belongs to an `Empresa` includes the `empresaId` field. Security rules can use this to verify that the current user has access to the `Empresa` document (through the `Usuarios` collection) without needing to perform a `get()` operation on the `Empresa` document itself. For example, rules for `/empresas/{empresaId}/lancamentos_fiscais/{lancamentoFiscalId}` will check if `request.auth.uid` exists in `/empresas/{empresaId}/usuarios/{uid}` or if the `empresaId` on the `lancamentos_fiscais` document matches an `Empresa` document the user has access to. This ensures that all security checks are atomic and independent of parent documents.\n*   **QAPs (Rules are not Filters):** The structure facilitates secure `list` operations because authorization rules can be applied directly at the collection level. Because all documents in collections like `/empresas/{empresaId}/lancamentos_fiscais` have the `empresaId` field, security rules can restrict access to only those documents where the `empresaId` matches an `Empresa` document the user has access to. This prevents the need to filter data on the client-side, ensuring that users only receive data they are authorized to access.\n\n*   **Audit Logs**: `/auditoria` are implemented at the root to allow for cross-company monitoring of actions. To constrain this data to only be read by admins, a separate `/roles_admin/{uid}` collection is leveraged to allow rule constraints."
   }
 }
-
-    
