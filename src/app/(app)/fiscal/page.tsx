@@ -30,7 +30,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { format, parseISO, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Calendar } from "@/components/ui/calendar";
 
 
 const actions = [
@@ -594,7 +593,7 @@ export default function FiscalPage() {
                                         renderRow={(item: XmlFile) => (
                                             <>
                                                 <TableCell className="font-medium">{item.fileName}</TableCell>
-                                                <TableCell>{isValid(new Date(item.date)) ? format(parseISO(item.date), 'dd/MM/yyyy', { locale: ptBR }) : 'N/A'}</TableCell>
+                                                <TableCell>{isValid(new Date(item.date)) ? format(new Date(item.date), 'dd/MM/yyyy', { locale: ptBR }) : 'N/A'}</TableCell>
                                                 <TableCell>
                                                     <Badge variant={
                                                         item.status === 'Lançado' ? 'default' :
@@ -754,7 +753,7 @@ function RecentDocumentsTable({
             if (!item.date || !isValid(new Date(item.date))) {
                 return searchMatch;
             }
-            const date = parseISO(item.date);
+            const date = new Date(item.date);
             const dateMatch = 
                 (!filters.startDate || date >= filters.startDate) &&
                 (!filters.endDate || date <= filters.endDate);
@@ -1750,3 +1749,5 @@ const ServiceSelector = ({ services, selectedServiceName, onSelect, disabled }: 
         </Popover>
     );
 };
+
+    
