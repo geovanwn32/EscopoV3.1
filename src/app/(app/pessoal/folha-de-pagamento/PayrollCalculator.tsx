@@ -1,0 +1,220 @@
+
+'use client';
+import { useState, useMemo } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useCompany } from '@/hooks/use-company';
+import { Funcionario, Rubrica } from '@/types/pessoal';
+import { Calculator, ArrowRight, Receipt, Loader2, Plus, Trash2, ArrowDownCircle, ArrowUpCircle, Info, RefreshCw, X, Copy, Wand2, Paperclip, Calendar, MoreHorizontal, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Filter, Search } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHeader, TableRow, TableHead, TableFooter } from '@/components/ui/table';
+import { Separator } from '@/components/ui/separator';
+import { MoneyInput } from '@/components/ui/money-input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
+
+interface PayrollEvent {
+    id: number;
+    type: 'provento' | 'desconto';
+    code: number;
+    description: string;
+    reference: number;
+    calculationBasis: {
+        cp: boolean; // Contribuição Previdenciária
+        fg: boolean; // FGTS
+        ir: boolean; // Imposto de Renda
+    };
+    provento: number;
+    desconto: number;
+}
+
+export default function PayrollCalculator() {
+    const { useScopedData } = useCompany();
+    const [funcionarios] = useScopedData<Funcionario[]>('cadastros-funcionarios', []);
+    
+    const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
+    
+    const initialEvents: PayrollEvent[] = [
+        { id: 1, type: 'provento', code: 1, description: 'SALÁRIO BASE', reference: 17.00, calculationBasis: { cp: true, fg: true, ir: true }, provento: 1133.33, desconto: 0 },
+        { id: 2, type: 'desconto', code: 201, description: 'INSS SOBRE SALÁRIOS', reference: 7.50, calculationBasis: { cp: false, fg: false, ir: false }, provento: 0, desconto: 85.00 },
+        { id: 3, type: 'provento', code: 263, description: 'ARREDONDAMENTO ATUAL', reference: 1.00, calculationBasis: { cp: false, fg: false, ir: false }, provento: 0.67, desconto: 0 },
+    ];
+    
+    const [events, setEvents] = useState<PayrollEvent[]>(initialEvents);
+    
+    const totals = useMemo(() => {
+        const totalProventos = events.reduce((acc, event) => acc + event.provento, 0);
+        const totalDescontos = events.reduce((acc, event) => acc + event.desconto, 0);
+        const liquido = totalProventos - totalDescontos;
+        return { totalProventos, totalDescontos, liquido };
+    }, [events]);
+
+    const BasisBadge = ({ active, label }: { active: boolean, label: string }) => (
+        <Badge variant={active ? 'default' : 'outline'} className={`w-6 h-6 p-0 flex items-center justify-center font-bold ${active ? 'bg-emerald-600 hover:bg-emerald-700' : 'text-muted-foreground'}`}>{label}</Badge>
+    );
+
+    return (
+        <Card>
+            <CardHeader>
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                    <div>
+                        <CardTitle className="text-xl flex items-center gap-2">
+                            Folha de Pagamento
+                            <Info className="h-4 w-4 text-muted-foreground cursor-pointer" />
+                        </CardTitle>
+                    </div>
+                     <div className="flex flex-wrap items-center gap-2">
+                        <Button variant="outline" size="icon"><Plus className="h-4 w-4" /></Button>
+                        <Button variant="outline" size="icon"><Copy className="h-4 w-4" /></Button>
+                        <Button variant="outline" size="icon"><Trash2 className="h-4 w-4" /></Button>
+                        <Button variant="outline" size="icon"><Wand2 className="h-4 w-4" /></Button>
+                        <Button variant="outline" size="icon"><Info className="h-4 w-4" /></Button>
+                        <Button variant="outline" size="icon"><Paperclip className="h-4 w-4" /></Button>
+                        <Button variant="outline" size="icon"><Calendar className="h-4 w-4" /></Button>
+                        <Button variant="default">PG</Button>
+                    </div>
+                </div>
+                 <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-4 items-end pt-4">
+                    <div className="col-span-1 md:col-span-2 lg:col-span-2 space-y-2">
+                        <Label htmlFor="employee">Empregado</Label>
+                        <Select value={selectedEmployeeId} onValueChange={setSelectedEmployeeId}>
+                            <SelectTrigger id="employee">
+                                <SelectValue placeholder="Funcionário Teste - 1" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {funcionarios.map(f => <SelectItem key={f.id} value={f.id.toString()}>{f.nome}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                     <div className="col-span-1 md:col-span-2 lg:col-span-2 space-y-2">
+                        <Label htmlFor="period">Período</Label>
+                        <div className="flex items-center gap-1">
+                            <Input id="period" value="Período de: 14/06/2023 à 30/06/2023 - Mensal" readOnly />
+                             <Popover>
+                                <PopoverTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></PopoverTrigger>
+                                <PopoverContent>...</PopoverContent>
+                            </Popover>
+                            <Button variant="ghost" size="icon"><RefreshCw className="h-4 w-4"/></Button>
+                            <Button variant="ghost" size="icon"><X className="h-4 w-4"/></Button>
+                        </div>
+                    </div>
+                     <div className="col-span-1 md:col-span-1 lg:col-span-1 space-y-2">
+                        <div className="flex items-center justify-end h-10">
+                            <p className="text-sm text-muted-foreground">01 de 1 Registro</p>
+                            <Button variant="ghost" size="icon" disabled><ChevronsLeft className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" disabled><ChevronLeft className="h-4 w-4" /></Button>
+                             <Button variant="ghost" size="icon"><ChevronRight className="h-4 w-4" /></Button>
+                             <Button variant="ghost" size="icon"><ChevronsRight className="h-4 w-4" /></Button>
+                        </div>
+                    </div>
+                     <div className="col-span-1 md:col-span-1 lg:col-span-1 space-y-2">
+                        <Label htmlFor="origin">Origem</Label>
+                         <Select defaultValue="todas">
+                            <SelectTrigger id="origin">
+                                <SelectValue placeholder="Todas" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="todas">Todas</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+            </CardHeader>
+            <CardContent>
+                <div className="rounded-md border">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead className="w-24"></TableHead>
+                                <TableHead className="w-24">Data</TableHead>
+                                <TableHead className="w-20">Evento</TableHead>
+                                <TableHead>Histórico</TableHead>
+                                <TableHead className="w-28 text-center">Incidências</TableHead>
+                                <TableHead className="w-24 text-right">Referência</TableHead>
+                                <TableHead className="w-32 text-right">Rendimento</TableHead>
+                                <TableHead className="w-32 text-right">Desconto</TableHead>
+                            </TableRow>
+                             <TableRow>
+                                <TableCell className="p-1">
+                                    <Button variant="ghost" size="icon"><Filter className="h-4 w-4"/></Button>
+                                </TableCell>
+                                <TableCell className="p-1" colSpan={3}>
+                                     <div className="relative">
+                                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                        <Input placeholder="Pesquisar por histórico..." className="pl-9" />
+                                    </div>
+                                </TableCell>
+                                <TableCell className="p-1" colSpan={4}></TableCell>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {events.map((event) => (
+                                <TableRow key={event.id}>
+                                    <TableCell className="flex items-center gap-1">
+                                        <Checkbox checked={event.type === 'provento'} className="data-[state=checked]:bg-emerald-600 border-emerald-600" />
+                                        <Checkbox checked={event.type === 'desconto'} className="data-[state=checked]:bg-red-600 border-red-600"/>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6"><Info className="h-4 w-4"/></Button>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6"><Trash2 className="h-4 w-4 text-destructive"/></Button>
+                                    </TableCell>
+                                    <TableCell>{new Date(2023, 5, 14).toLocaleDateString('pt-BR')}</TableCell>
+                                    <TableCell>{event.code}</TableCell>
+                                    <TableCell className="font-medium">{event.description}</TableCell>
+                                    <TableCell>
+                                        <div className="flex justify-center items-center gap-2">
+                                            <BasisBadge active={event.calculationBasis.cp} label="C" />
+                                            <BasisBadge active={event.calculationBasis.fg} label="F" />
+                                            <BasisBadge active={event.calculationBasis.ir} label="I" />
+                                        </div>
+                                    </TableCell>
+                                    <TableCell className="text-right font-mono">{event.reference.toFixed(2).replace('.', ',')}</TableCell>
+                                    <TableCell className={`text-right font-mono ${event.provento > 0 ? 'text-emerald-600' : ''}`}>{event.provento.toFixed(2).replace('.', ',')}</TableCell>
+                                    <TableCell className={`text-right font-mono ${event.desconto > 0 ? 'text-red-600' : ''}`}>{event.desconto.toFixed(2).replace('.', ',')}</TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                         <TableFooter>
+                            <TableRow>
+                                <TableCell colSpan={6}></TableCell>
+                                <TableCell className="text-right font-bold font-mono">{totals.totalProventos.toFixed(2).replace('.', ',')}</TableCell>
+                                <TableCell className="text-right font-bold font-mono">{totals.totalDescontos.toFixed(2).replace('.', ',')}</TableCell>
+                            </TableRow>
+                             <TableRow>
+                                <TableCell colSpan={6} className="text-right font-bold text-lg">Líquido à Receber:</TableCell>
+                                <TableCell colSpan={2} className="text-right font-bold font-mono text-lg">{totals.liquido.toFixed(2).replace('.', ',')}</TableCell>
+                            </TableRow>
+                        </TableFooter>
+                    </Table>
+                </div>
+            </CardContent>
+            <CardFooter className="flex items-center justify-between">
+                 <div className="flex items-center gap-2">
+                    <Select defaultValue="30">
+                        <SelectTrigger className="w-32">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="10">10 / Página</SelectItem>
+                            <SelectItem value="30">30 / Página</SelectItem>
+                            <SelectItem value="50">50 / Página</SelectItem>
+                        </SelectContent>
+                    </Select>
+                     <p className="text-sm text-muted-foreground">
+                        3 Registros
+                    </p>
+                </div>
+                <div className="flex items-center gap-2">
+                    <Button variant="outline" size="icon" disabled><ChevronsLeft className="h-4 w-4" /></Button>
+                    <Button variant="outline" size="icon" disabled><ChevronLeft className="h-4 w-4" /></Button>
+                    <Input className="w-16 text-center" defaultValue="1" />
+                     <span className="text-muted-foreground">/ 1</span>
+                    <Button variant="outline" size="icon" disabled><ChevronRight className="h-4 w-4" /></Button>
+                    <Button variant="outline" size="icon" disabled><ChevronsRight className="h-4 w-4" /></Button>
+                </div>
+            </CardFooter>
+        </Card>
+    );
+}
+
