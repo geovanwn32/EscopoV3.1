@@ -8,11 +8,12 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { SavedCalculation } from '@/types/pessoal';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { History, MoreVertical, FileDown, Pencil, Trash2 } from 'lucide-react';
+import { History, MoreVertical, FileDown, Pencil, Trash2, Search, Calculator, FileText, HandCoins } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 
 export default function RecentCalculations() {
     const router = useRouter();
@@ -21,6 +22,9 @@ export default function RecentCalculations() {
     const { toast } = useToast();
     
     const [itemToDelete, setItemToDelete] = useState<SavedCalculation | null>(null);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 5;
 
     const handleEdit = (calc: SavedCalculation) => {
         sessionStorage.setItem('edit-calculation', JSON.stringify(calc));
@@ -46,17 +50,52 @@ export default function RecentCalculations() {
         setItemToDelete(null);
     };
 
+    const filteredCalculations = useMemo(() => {
+        return savedCalculations.filter(calc => 
+            (calc.socioName || calc.employeeName || '').toLowerCase().includes(searchTerm.toLowerCase())
+        );
+    }, [savedCalculations, searchTerm]);
+
+    const paginatedCalculations = useMemo(() => {
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        return filteredCalculations.slice(startIndex, startIndex + itemsPerPage);
+    }, [filteredCalculations, currentPage, itemsPerPage]);
+
+    const totalPages = Math.ceil(filteredCalculations.length / itemsPerPage);
+
+    const getCalcIcon = (type: SavedCalculation['type']) => {
+        switch(type) {
+            case 'Folha': return <Calculator className="h-4 w-4 text-primary" />;
+            case 'RCI': return <HandCoins className="h-4 w-4 text-amber-600" />;
+            default: return <FileText className="h-4 w-4 text-muted-foreground" />;
+        }
+    }
+
+
     return (
         <>
             <Card>
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <History className="h-6 w-6" />
-                        Cálculos Salvos Recentemente
-                    </CardTitle>
-                    <CardDescription>
-                        Aqui estão os últimos cálculos de pró-labore e folhas de pagamento que você salvou. Clique duas vezes em uma linha para editar.
-                    </CardDescription>
+                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                        <div className='flex-1'>
+                            <CardTitle className="flex items-center gap-2">
+                                <History className="h-6 w-6" />
+                                Cálculos Salvos
+                            </CardTitle>
+                            <CardDescription>
+                                Visualize, edite ou exclua cálculos salvos.
+                            </CardDescription>
+                        </div>
+                         <div className="relative w-full sm:w-auto sm:max-w-xs">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input 
+                                placeholder="Buscar por nome..." 
+                                className="pl-10"
+                                value={searchTerm}
+                                onChange={(e) => {setSearchTerm(e.target.value); setCurrentPage(1);}}
+                            />
+                        </div>
+                    </div>
                 </CardHeader>
                 <CardContent>
                     <div className="rounded-md border">
@@ -72,12 +111,15 @@ export default function RecentCalculations() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {savedCalculations.length > 0 ? (
-                                    savedCalculations.slice(0, 5).map(calc => (
+                                {paginatedCalculations.length > 0 ? (
+                                    paginatedCalculations.map(calc => (
                                         <TableRow key={calc.id} onDoubleClick={() => handleEdit(calc)} className="cursor-pointer">
                                             <TableCell>{format(new Date(calc.date), 'dd/MM/yyyy')}</TableCell>
                                             <TableCell>{calc.mesCompetencia}</TableCell>
-                                            <TableCell>{calc.type}</TableCell>
+                                            <TableCell className='flex items-center gap-2'>
+                                                {getCalcIcon(calc.type)}
+                                                {calc.type}
+                                            </TableCell>
                                             <TableCell className="font-medium">{calc.socioName || calc.employeeName}</TableCell>
                                             <TableCell className="text-right font-mono">{calc.netValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
                                             <TableCell>
@@ -103,12 +145,33 @@ export default function RecentCalculations() {
                                 ) : (
                                     <TableRow>
                                         <TableCell colSpan={6} className="h-24 text-center">
-                                            Nenhum cálculo salvo ainda.
+                                            Nenhum cálculo encontrado.
                                         </TableCell>
                                     </TableRow>
                                 )}
                             </TableBody>
                         </Table>
+                    </div>
+                     <div className="flex items-center justify-end space-x-2 py-4">
+                        <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                        disabled={currentPage === 1}
+                        >
+                        Anterior
+                        </Button>
+                        <span className="text-sm text-muted-foreground">
+                            Página {currentPage} de {totalPages > 0 ? totalPages : 1}
+                        </span>
+                        <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                        disabled={currentPage === totalPages || totalPages === 0}
+                        >
+                        Próxima
+                        </Button>
                     </div>
                 </CardContent>
             </Card>

@@ -1,5 +1,4 @@
 
-
 'use client';
 import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -91,7 +90,7 @@ export default function RciCalculator() {
     }, [selectedSocio]);
 
     const handleAddRubrica = (type: 'provento' | 'desconto') => {
-        const newRubrica: Rubrica = { id: Date.now(), label: '', value: 0 };
+        const newRubrica: Rubrica = { id: Date.now(), descricao: '', value: 0, codigo: '', tipo: 'Provento', incidencias: {inss: false, irrf: false, fgts: false, contribuicaoSindical: false} };
         if (type === 'provento') {
             setManualProventos(prev => [...prev, newRubrica]);
         } else {
@@ -99,7 +98,7 @@ export default function RciCalculator() {
         }
     };
 
-    const handleUpdateRubrica = (type: 'provento' | 'desconto', id: number, field: 'label' | 'value', fieldValue: string | number) => {
+    const handleUpdateRubrica = (type: 'provento' | 'desconto', id: number, field: 'descricao' | 'value', fieldValue: string | number) => {
         const updater = (prev: Rubrica[]) => prev.map(r => 
             r.id === id ? { ...r, [field]: fieldValue } : r
         );
@@ -135,8 +134,8 @@ export default function RciCalculator() {
 
         // Simulate calculation delay
         setTimeout(() => {
-            const totalManualProventos = currentProventos.reduce((acc, p) => acc + p.value, 0);
-            const totalManualDescontos = currentDescontos.reduce((acc, p) => acc + p.value, 0);
+            const totalManualProventos = currentProventos.reduce((acc, p) => acc + (p.value || 0), 0);
+            const totalManualDescontos = currentDescontos.reduce((acc, p) => acc + (p.value || 0), 0);
 
             const baseInss = currentProLabore + totalManualProventos;
 
@@ -167,22 +166,22 @@ export default function RciCalculator() {
             const irrf = Math.max(0, parseFloat(Math.min(irrfFromStandardDeduction, irrfFromSimplifiedDeduction).toFixed(2)));
 
             const totalProventos = baseInss;
-            const descontosCalculados = [
-                { id: 1, label: "INSS (11%)", value: inss },
-                { id: 2, label: "IRRF", value: irrf },
+            const descontosCalculados: Rubrica[] = [
+                { id: 1, descricao: "INSS (11%)", value: inss, codigo: '201', tipo: 'Desconto', incidencias: {inss: false, irrf: false, fgts: false, contribuicaoSindical: false} },
+                { id: 2, descricao: "IRRF", value: irrf, codigo: '202', tipo: 'Desconto', incidencias: {inss: false, irrf: false, fgts: false, contribuicaoSindical: false} },
             ];
             
-            const totalDescontos = descontosCalculados.reduce((acc, d) => acc + d.value, 0) + totalManualDescontos;
+            const totalDescontos = descontosCalculados.reduce((acc, d) => acc + (d.value || 0), 0) + totalManualDescontos;
             const liquido = totalProventos - totalDescontos;
             
-            const proventos = [
-                { id: 0, label: "Pró-labore", value: currentProLabore },
-                ...currentProventos.filter(p => p.label && p.value > 0),
+            const proventos: Rubrica[] = [
+                { id: 0, descricao: "Pró-labore", value: currentProLabore, codigo: '101', tipo: 'Provento', incidencias: {inss: true, irrf: true, fgts: false, contribuicaoSindical: false} },
+                ...currentProventos.filter(p => p.descricao && (p.value || 0) > 0),
             ];
             
-            const descontos = [
+            const descontos: Rubrica[] = [
                 ...descontosCalculados,
-                ...currentDescontos.filter(d => d.label && d.value > 0),
+                ...currentDescontos.filter(d => d.descricao && (d.value || 0) > 0),
             ];
 
             setCalculation({
@@ -265,8 +264,8 @@ export default function RciCalculator() {
         
         // Main Content Table
         const mainTableBody = [
-            ...calculation.proventos.map((p, i) => [`10${i + 1}`, p.label, formatCurrencyNoSymbol(p.value), '']),
-            ...calculation.descontos.map((d, i) => [`20${i + 1}`, d.label, '', formatCurrencyNoSymbol(d.value)]),
+            ...calculation.proventos.map((p, i) => [`10${i + 1}`, p.descricao, formatCurrencyNoSymbol(p.value || 0), '']),
+            ...calculation.descontos.map((d, i) => [`20${i + 1}`, d.descricao, '', formatCurrencyNoSymbol(d.value || 0)]),
         ];
 
         autoTable(doc, {
@@ -412,8 +411,8 @@ export default function RciCalculator() {
                             <TabsContent value="proventos" className="space-y-2">
                                  {manualProventos.map(p => (
                                     <div key={p.id} className="flex gap-2 items-center">
-                                        <Input placeholder="Descrição do provento" value={p.label} onChange={(e) => handleUpdateRubrica('provento', p.id, 'label', e.target.value)} />
-                                        <MoneyInput id={`provento-${p.id}`} value={p.value} onValueChange={(val) => handleUpdateRubrica('provento', p.id, 'value', val)} />
+                                        <Input placeholder="Descrição do provento" value={p.descricao} onChange={(e) => handleUpdateRubrica('provento', p.id, 'descricao', e.target.value)} />
+                                        <MoneyInput id={`provento-${p.id}`} value={p.value || 0} onValueChange={(val) => handleUpdateRubrica('provento', p.id, 'value', val)} />
                                         <Button variant="ghost" size="icon" onClick={() => handleRemoveRubrica('provento', p.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                                     </div>
                                 ))}
@@ -422,8 +421,8 @@ export default function RciCalculator() {
                             <TabsContent value="descontos" className="space-y-2">
                                 {manualDescontos.map(d => (
                                     <div key={d.id} className="flex gap-2 items-center">
-                                        <Input placeholder="Descrição do desconto" value={d.label} onChange={(e) => handleUpdateRubrica('desconto', d.id, 'label', e.target.value)} />
-                                        <MoneyInput id={`desconto-${d.id}`} value={d.value} onValueChange={(val) => handleUpdateRubrica('desconto', d.id, 'value', val)} />
+                                        <Input placeholder="Descrição do desconto" value={d.descricao} onChange={(e) => handleUpdateRubrica('desconto', d.id, 'descricao', e.target.value)} />
+                                        <MoneyInput id={`desconto-${d.id}`} value={d.value || 0} onValueChange={(val) => handleUpdateRubrica('desconto', d.id, 'value', val)} />
                                         <Button variant="ghost" size="icon" onClick={() => handleRemoveRubrica('desconto', d.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                                     </div>
                                 ))}
@@ -471,16 +470,16 @@ export default function RciCalculator() {
                                     <TableBody>
                                         {calculation.proventos.map(item => (
                                             <TableRow key={`p-${item.id}`}>
-                                                <TableCell className="font-medium">{item.label}</TableCell>
-                                                <TableCell className="text-right font-mono text-emerald-600">{formatCurrencyNoSymbol(item.value)}</TableCell>
+                                                <TableCell className="font-medium">{item.descricao}</TableCell>
+                                                <TableCell className="text-right font-mono text-emerald-600">{formatCurrencyNoSymbol(item.value || 0)}</TableCell>
                                                 <TableCell></TableCell>
                                             </TableRow>
                                         ))}
                                         {calculation.descontos.map(item => (
                                             <TableRow key={`d-${item.id}`}>
-                                                <TableCell className="font-medium">{item.label}</TableCell>
+                                                <TableCell className="font-medium">{item.descricao}</TableCell>
                                                 <TableCell></TableCell>
-                                                <TableCell className="text-right font-mono text-red-600">{formatCurrencyNoSymbol(item.value)}</TableCell>
+                                                <TableCell className="text-right font-mono text-red-600">{formatCurrencyNoSymbol(item.value || 0)}</TableCell>
                                             </TableRow>
                                         ))}
                                     </TableBody>
@@ -517,8 +516,8 @@ export default function RciCalculator() {
                                 <Button variant="outline" onClick={handleSaveCalculation} disabled={!calculation}>
                                 <Save className="mr-2 h-4 w-4" /> Salvar Cálculo
                                 </Button>
-                                <Button variant="outline" onClick={handleSavePdf} disabled={!calculation}>
-                                <FileDown className="mr-2 h-4 w-4" /> Salvar PDF
+                                <Button onClick={handleSavePdf} disabled={!calculation}>
+                                <FileDown className="mr-2 h-4 w-4" /> Gerar PDF
                                 </Button>
                         </CardFooter>
                     )}
@@ -527,5 +526,3 @@ export default function RciCalculator() {
         </div>
     );
 }
-
-
