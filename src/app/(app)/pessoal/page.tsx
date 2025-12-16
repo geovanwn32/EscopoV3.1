@@ -108,6 +108,7 @@ function RecentCalculations() {
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Data</TableHead>
+                                    <TableHead>Competência</TableHead>
                                     <TableHead>Tipo</TableHead>
                                     <TableHead>Sócio / Funcionário</TableHead>
                                     <TableHead className="text-right">Valor Líquido</TableHead>
@@ -119,6 +120,7 @@ function RecentCalculations() {
                                     savedCalculations.slice(0, 5).map(calc => (
                                         <TableRow key={calc.id} onDoubleClick={() => handleEdit(calc)} className="cursor-pointer">
                                             <TableCell>{format(new Date(calc.date), 'dd/MM/yyyy')}</TableCell>
+                                            <TableCell>{calc.mesCompetencia}</TableCell>
                                             <TableCell>{calc.type}</TableCell>
                                             <TableCell className="font-medium">{calc.socioName || calc.employeeName}</TableCell>
                                             <TableCell className="text-right font-mono">{calc.netValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</TableCell>
@@ -144,7 +146,7 @@ function RecentCalculations() {
                                     ))
                                 ) : (
                                     <TableRow>
-                                        <TableCell colSpan={5} className="h-24 text-center">
+                                        <TableCell colSpan={6} className="h-24 text-center">
                                             Nenhum cálculo salvo ainda.
                                         </TableCell>
                                     </TableRow>
