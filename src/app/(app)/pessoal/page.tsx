@@ -17,13 +17,6 @@ import { useToast } from '@/hooks/use-toast';
 
 const calculators = [
     {
-        href: '/pessoal/folha-de-pagamento',
-        icon: <Calculator className="h-8 w-8" />,
-        label: 'Folha de Pagamento',
-        description: 'Calcule a folha de pagamento mensal de seus funcionários.',
-        color: "text-sky-600 bg-sky-100/80 group-hover:bg-sky-600 dark:bg-sky-900/40 dark:text-sky-400 dark:group-hover:bg-sky-500",
-    },
-    {
         href: '/pessoal/ferias',
         icon: <CalendarOff className="h-8 w-8" />,
         label: 'Férias',
@@ -186,10 +179,25 @@ export default function PessoalPage() {
                 </p>
             </div>
 
+             <Card>
+                <CardHeader>
+                    <CardTitle>Folha de Pagamento</CardTitle>
+                    <CardDescription>Calcule a folha de pagamento mensal de seus funcionários de forma detalhada.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Button asChild size="lg">
+                        <Link href="/pessoal/folha-de-pagamento">
+                            <Calculator className="mr-2 h-5 w-5" /> Abrir Calculadora da Folha
+                        </Link>
+                    </Button>
+                </CardContent>
+            </Card>
+
+
             <Card>
                 <CardHeader>
-                    <CardTitle>Central de Cálculos e Cadastros</CardTitle>
-                    <CardDescription>Selecione uma das opções abaixo para começar.</CardDescription>
+                    <CardTitle>Outros Cálculos e Cadastros</CardTitle>
+                    <CardDescription>Acesse outras ferramentas e cadastros essenciais do departamento pessoal.</CardDescription>
                 </CardHeader>
                 <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {calculators.map((util) => (
