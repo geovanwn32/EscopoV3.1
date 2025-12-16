@@ -3,6 +3,7 @@
 
 
 
+
 export interface Dependente {
     id: number;
     nome: string;
@@ -91,6 +92,7 @@ export interface CalculationResult {
     liquido: number;
     baseInss: number;
     baseIrrf: number;
+    irrfCalculationMethod?: string;
 }
 
 export interface SavedCalculation {
@@ -114,6 +116,7 @@ export interface SavedCalculation {
     horasExtras100?: number;
     calculation: CalculationResult;
 }
+
 
 
 

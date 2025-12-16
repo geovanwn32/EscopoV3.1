@@ -22,6 +22,9 @@ import autoTable from 'jspdf-autotable';
 import { MoneyInput } from '@/components/ui/money-input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+
 
 const inssBrackets = [
     { limit: 1412.00, rate: 0.075, deduction: 0 },
@@ -152,6 +155,7 @@ export default function PayrollCalculator() {
 
             // Cálculo IRRF (considerando dedução padrão vs simplificada)
             let irrf = 0;
+            let irrfCalculationMethod = 'Padrão';
             let irrfPadrao = 0;
             for (const bracket of irrfBrackets) {
                 if (baseIrrf <= bracket.limit) {
@@ -168,7 +172,15 @@ export default function PayrollCalculator() {
                     break;
                 }
             }
-            irrf = Math.max(0, parseFloat(Math.min(irrfPadrao, irrfSimplificado).toFixed(2)));
+
+            if (irrfPadrao <= irrfSimplificado) {
+                irrf = irrfPadrao;
+            } else {
+                irrf = irrfSimplificado;
+                irrfCalculationMethod = 'Simplificado';
+            }
+            
+            irrf = Math.max(0, parseFloat(irrf.toFixed(2)));
             
             // Montagem do resultado
             const proventos: Rubrica[] = [
@@ -181,8 +193,8 @@ export default function PayrollCalculator() {
 
             const descontos: Rubrica[] = [];
             if (descontoFaltas > 0) descontos.push({ id: 101, codigo: '201', descricao: `Faltas (${faltas} dias)`, tipo: 'Desconto', value: descontoFaltas, incidencias: { inss: true, irrf: true, fgts: true, contribuicaoSindical: false } });
-            if (inss > 0) descontos.push({ id: 102, codigo: '202', descricao: 'INSS', tipo: 'Desconto', value: inss, incidencias: { inss: false, irrf: false, fgts: false, contribuicaoSindical: false } });
-            if (irrf > 0) descontos.push({ id: 103, codigo: '203', descricao: 'IRRF', tipo: 'Desconto', value: irrf, incidencias: { inss: false, irrf: false, fgts: false, contribuicaoSindical: false } });
+            if (inss > 0) descontos.push({ id: 102, codigo: '202', descricao: 'INSS sobre Salário', tipo: 'Desconto', value: inss, incidencias: { inss: false, irrf: false, fgts: false, contribuicaoSindical: false } });
+            if (irrf > 0) descontos.push({ id: 103, codigo: '203', descricao: 'IRRF sobre Salário', tipo: 'Desconto', value: irrf, incidencias: { inss: false, irrf: false, fgts: false, contribuicaoSindical: false } });
             descontos.push(...manualDescontos.filter(d => d.value || 0 > 0));
 
             const totalProventos = proventos.reduce((acc, p) => acc + (p.value || 0), 0);
@@ -197,6 +209,7 @@ export default function PayrollCalculator() {
                 liquido,
                 baseInss,
                 baseIrrf,
+                irrfCalculationMethod,
             });
 
             setIsLoading(false);
@@ -404,43 +417,47 @@ export default function PayrollCalculator() {
 
                  <Card>
                     <CardHeader><CardTitle>2. Lançamentos Manuais</CardTitle></CardHeader>
-                    <CardContent className="space-y-4">
-                        <div>
-                            <Label className='text-emerald-600'>Proventos</Label>
-                            <div className="space-y-2 mt-2">
-                                {manualProventos.map(p => (
-                                    <div key={p.id} className="flex gap-2 items-center">
-                                        <Select onValueChange={(rubricaId) => handleSelectRubrica(p.id, 'provento', rubricaId)}>
-                                            <SelectTrigger><SelectValue placeholder="Selecione a rubrica..." /></SelectTrigger>
-                                            <SelectContent>
-                                                {rubricas.filter(r => r.tipo === 'Provento').map(rub => <SelectItem key={rub.id} value={rub.id.toString()}>{rub.descricao}</SelectItem>)}
-                                            </SelectContent>
-                                        </Select>
-                                        <MoneyInput id={`provento-${p.id}`} value={p.value || 0} onValueChange={(val) => handleUpdateRubricaValue(p.id, 'provento', val)} />
-                                        <Button variant="ghost" size="icon" onClick={() => handleRemoveRubrica(p.id, 'provento')}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                                    </div>
-                                ))}
-                                <Button variant="outline" size="sm" className="w-full" onClick={() => handleAddRubrica('provento')}><Plus className="mr-2 h-4 w-4" />Adicionar Provento</Button>
-                            </div>
-                        </div>
-                         <div>
-                            <Label className='text-red-600'>Descontos</Label>
-                             <div className="space-y-2 mt-2">
-                                {manualDescontos.map(d => (
-                                    <div key={d.id} className="flex gap-2 items-center">
-                                        <Select onValueChange={(rubricaId) => handleSelectRubrica(d.id, 'desconto', rubricaId)}>
-                                            <SelectTrigger><SelectValue placeholder="Selecione a rubrica..." /></SelectTrigger>
-                                            <SelectContent>
-                                                {rubricas.filter(r => r.tipo === 'Desconto').map(rub => <SelectItem key={rub.id} value={rub.id.toString()}>{rub.descricao}</SelectItem>)}
-                                            </SelectContent>
-                                        </Select>
-                                        <MoneyInput id={`desconto-${d.id}`} value={d.value || 0} onValueChange={(val) => handleUpdateRubricaValue(d.id, 'desconto', val)} />
-                                        <Button variant="ghost" size="icon" onClick={() => handleRemoveRubrica(d.id, 'desconto')}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                                    </div>
-                                ))}
-                                <Button variant="outline" size="sm" className="w-full" onClick={() => handleAddRubrica('desconto')}><Plus className="mr-2 h-4 w-4" />Adicionar Desconto</Button>
-                            </div>
-                        </div>
+                    <CardContent>
+                        <Tabs defaultValue="proventos">
+                            <TabsList className="grid w-full grid-cols-2">
+                                <TabsTrigger value="proventos">Proventos</TabsTrigger>
+                                <TabsTrigger value="descontos">Descontos</TabsTrigger>
+                            </TabsList>
+                            <TabsContent value="proventos" className="pt-4">
+                                <div className="space-y-2">
+                                    {manualProventos.map(p => (
+                                        <div key={p.id} className="flex gap-2 items-center">
+                                            <Select onValueChange={(rubricaId) => handleSelectRubrica(p.id, 'provento', rubricaId)}>
+                                                <SelectTrigger><SelectValue placeholder="Selecione a rubrica..." /></SelectTrigger>
+                                                <SelectContent>
+                                                    {rubricas.filter(r => r.tipo === 'Provento').map(rub => <SelectItem key={rub.id} value={rub.id.toString()}>{rub.descricao}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
+                                            <MoneyInput id={`provento-${p.id}`} value={p.value || 0} onValueChange={(val) => handleUpdateRubricaValue(p.id, 'provento', val)} />
+                                            <Button variant="ghost" size="icon" onClick={() => handleRemoveRubrica(p.id, 'provento')}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                                        </div>
+                                    ))}
+                                    <Button variant="outline" size="sm" className="w-full" onClick={() => handleAddRubrica('provento')}><Plus className="mr-2 h-4 w-4" />Adicionar Provento</Button>
+                                </div>
+                            </TabsContent>
+                            <TabsContent value="descontos" className="pt-4">
+                                <div className="space-y-2">
+                                    {manualDescontos.map(d => (
+                                        <div key={d.id} className="flex gap-2 items-center">
+                                            <Select onValueChange={(rubricaId) => handleSelectRubrica(d.id, 'desconto', rubricaId)}>
+                                                <SelectTrigger><SelectValue placeholder="Selecione a rubrica..." /></SelectTrigger>
+                                                <SelectContent>
+                                                    {rubricas.filter(r => r.tipo === 'Desconto').map(rub => <SelectItem key={rub.id} value={rub.id.toString()}>{rub.descricao}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
+                                            <MoneyInput id={`desconto-${d.id}`} value={d.value || 0} onValueChange={(val) => handleUpdateRubricaValue(d.id, 'desconto', val)} />
+                                            <Button variant="ghost" size="icon" onClick={() => handleRemoveRubrica(d.id, 'desconto')}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                                        </div>
+                                    ))}
+                                    <Button variant="outline" size="sm" className="w-full" onClick={() => handleAddRubrica('desconto')}><Plus className="mr-2 h-4 w-4" />Adicionar Desconto</Button>
+                                </div>
+                            </TabsContent>
+                        </Tabs>
                     </CardContent>
                 </Card>
                  <Button onClick={handleCalculate} disabled={!selectedEmployeeId || isLoading} className="w-full" size="lg">
@@ -486,15 +503,36 @@ export default function PayrollCalculator() {
                                     </div>
                                 </div>
                                 <Table>
-                                    <TableHeader><TableRow><TableHead>Descrição</TableHead><TableHead className="text-right">Proventos</TableHead><TableHead className="text-right">Descontos</TableHead></TableRow></TableHeader>
+                                    <TableHeader><TableRow><TableHead className="w-[80px]">Cód.</TableHead><TableHead>Descrição</TableHead><TableHead className="text-right">Valor</TableHead></TableRow></TableHeader>
                                     <TableBody>
-                                        {calculation.proventos.map(item => (<TableRow key={`p-${item.id}`}><TableCell className="font-medium">{item.descricao}</TableCell><TableCell className="text-right font-mono text-emerald-600">{formatCurrencyNoSymbol(item.value || 0)}</TableCell><TableCell></TableCell></TableRow>))}
-                                        {calculation.descontos.map(item => (<TableRow key={`d-${item.id}`}><TableCell className="font-medium">{item.descricao}</TableCell><TableCell></TableCell><TableCell className="text-right font-mono text-red-600">{formatCurrencyNoSymbol(item.value || 0)}</TableCell></TableRow>))}
+                                        {calculation.proventos.map(item => (<TableRow key={`p-${item.id}`}><TableCell className="font-mono">{item.codigo}</TableCell><TableCell className="font-medium">{item.descricao}</TableCell><TableCell className="text-right font-mono text-emerald-600">{formatCurrencyNoSymbol(item.value || 0)}</TableCell></TableRow>))}
                                     </TableBody>
                                     <TableFooter>
-                                        <TableRow className="font-bold"><TableCell>Totais</TableCell><TableCell className="text-right font-mono text-emerald-600">{formatCurrencyNoSymbol(calculation.totalProventos)}</TableCell><TableCell className="text-right font-mono text-red-600">{formatCurrencyNoSymbol(calculation.totalDescontos)}</TableCell></TableRow>
+                                        <TableRow className="font-bold"><TableCell colSpan={2}>Total de Proventos</TableCell><TableCell className="text-right font-mono text-emerald-600">{formatCurrencyNoSymbol(calculation.totalProventos)}</TableCell></TableRow>
                                     </TableFooter>
                                 </Table>
+                                <Table className='mt-4'>
+                                    <TableHeader><TableRow><TableHead className="w-[80px]">Cód.</TableHead><TableHead>Descrição</TableHead><TableHead className="text-right">Valor</TableHead></TableRow></TableHeader>
+                                    <TableBody>
+                                        {calculation.descontos.map(item => (<TableRow key={`d-${item.id}`}><TableCell className="font-mono">{item.codigo}</TableCell>
+                                            <TableCell className="font-medium flex items-center gap-1.5">
+                                                {item.descricao}
+                                                {item.descricao.includes('IRRF') && calculation.irrfCalculationMethod && (
+                                                     <TooltipProvider>
+                                                        <Tooltip>
+                                                            <TooltipTrigger><Info className="h-3 w-3 text-muted-foreground" /></TooltipTrigger>
+                                                            <TooltipContent><p>Cálculo pelo método {calculation.irrfCalculationMethod}</p></TooltipContent>
+                                                        </Tooltip>
+                                                    </TooltipProvider>
+                                                )}
+                                                </TableCell>
+                                            <TableCell className="text-right font-mono text-red-600">{formatCurrencyNoSymbol(item.value || 0)}</TableCell></TableRow>))}
+                                    </TableBody>
+                                    <TableFooter>
+                                        <TableRow className="font-bold"><TableCell colSpan={2}>Total de Descontos</TableCell><TableCell className="text-right font-mono text-red-600">{formatCurrencyNoSymbol(calculation.totalDescontos)}</TableCell></TableRow>
+                                    </TableFooter>
+                                </Table>
+
                                 <div className='mt-6 flex justify-between items-center font-bold text-lg p-4 bg-muted rounded-lg'>
                                     <span>Valor Líquido</span><span className="font-mono text-xl">{formatCurrency(calculation.liquido)}</span>
                                 </div>
