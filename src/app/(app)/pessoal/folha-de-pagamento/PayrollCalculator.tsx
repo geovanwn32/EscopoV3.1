@@ -1,261 +1,453 @@
 
 'use client';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCompany } from '@/hooks/use-company';
-import { Funcionario } from '@/types/pessoal';
-import { Info, Calendar as CalendarIcon, MoreHorizontal, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Filter, Search, Check, ChevronsUpDown, Calculator, Save, FileDown, Trash2 } from 'lucide-react';
+import { Funcionario, Rubrica, CalculationResult, SavedCalculation } from '@/types/pessoal';
+import { Loader2, Calculator, Save, FileDown, Plus, Trash2, Info, Check, ChevronsUpDown, Calendar as CalendarIcon } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHeader, TableRow, TableHead, TableFooter } from '@/components/ui/table';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { useToast } from '@/hooks/use-toast';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { MoneyInput } from '@/components/ui/money-input';
 
 
-interface PayrollEvent {
-    id: number;
-    type: 'provento' | 'desconto';
-    code: number;
-    description: string;
-    reference: number;
-    calculationBasis: {
-        cp: boolean; // Contribuição Previdenciária
-        fg: boolean; // FGTS
-        ir: boolean; // Imposto de Renda
-    };
-    provento: number;
-    desconto: number;
-}
+const inssBrackets = [
+    { limit: 1412.00, rate: 0.075, deduction: 0 },
+    { limit: 2666.68, rate: 0.09, deduction: 21.18 },
+    { limit: 4000.03, rate: 0.12, deduction: 101.18 },
+    { limit: 7786.02, rate: 0.14, deduction: 181.18 },
+];
+const inssTeto = 908.85; // Valor máximo de contribuição
+
+const irrfBrackets = [
+    { limit: 2259.20, rate: 0, deduction: 0 },
+    { limit: 2826.65, rate: 0.075, deduction: 169.44 },
+    { limit: 3751.05, rate: 0.15, deduction: 381.44 },
+    { limit: 4664.68, rate: 0.225, deduction: 662.77 },
+    { limit: Infinity, rate: 0.275, deduction: 896.00 },
+];
+const irrfSimplifiedDeduction = 564.80; // R$ 528.00 em 2023, atualizado para R$ 564,80 em 2024
+const irrfDependenteDeduction = 189.59;
+
 
 export default function PayrollCalculator() {
-    const { useScopedData } = useCompany();
+    const { toast } = useToast();
+    const { useScopedData, companies, currentCompany } = useCompany();
     const [funcionarios] = useScopedData<Funcionario[]>('cadastros-funcionarios', []);
-    
+    const [savedCalculations, setSavedCalculations] = useScopedData<SavedCalculation[]>('pessoal-calculos-salvos', []);
+
     const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
-    const [calculationType, setCalculationType] = useState('mensal');
     const [competenceDate, setCompetenceDate] = useState<Date | undefined>(new Date());
     const [openEmployeeSelector, setOpenEmployeeSelector] = useState(false);
     
-    const initialEvents: PayrollEvent[] = [
-        { id: 1, type: 'provento', code: 1, description: 'SALÁRIO BASE', reference: 17.00, calculationBasis: { cp: true, fg: true, ir: true }, provento: 1133.33, desconto: 0 },
-        { id: 2, type: 'desconto', code: 201, description: 'INSS SOBRE SALÁRIOS', reference: 7.50, calculationBasis: { cp: false, fg: false, ir: false }, provento: 0, desconto: 85.00 },
-        { id: 3, type: 'provento', code: 263, description: 'ARREDONDAMENTO ATUAL', reference: 1.00, calculationBasis: { cp: false, fg: false, ir: false }, provento: 0.67, desconto: 0 },
-    ];
-    
-    const [events, setEvents] = useState<PayrollEvent[]>(initialEvents);
-    
-    const totals = useMemo(() => {
-        const totalProventos = events.reduce((acc, event) => acc + event.provento, 0);
-        const totalDescontos = events.reduce((acc, event) => acc + event.desconto, 0);
-        const liquido = totalProventos - totalDescontos;
-        return { totalProventos, totalDescontos, liquido };
-    }, [events]);
+    const [faltas, setFaltas] = useState(0);
+    const [horasExtras50, setHorasExtras50] = useState(0);
+    const [horasExtras100, setHorasExtras100] = useState(0);
 
-    const BasisBadge = ({ active, label }: { active: boolean, label: string }) => (
-        <Badge variant={active ? 'default' : 'outline'} className={`w-6 h-6 p-0 flex items-center justify-center font-bold ${active ? 'bg-emerald-600 hover:bg-emerald-700' : 'text-muted-foreground'}`}>{label}</Badge>
-    );
+    const [manualProventos, setManualProventos] = useState<Rubrica[]>([]);
+    const [manualDescontos, setManualDescontos] = useState<Rubrica[]>([]);
+    
+    const [isLoading, setIsLoading] = useState(false);
+    const [calculation, setCalculation] = useState<CalculationResult | null>(null);
+
+    const activeCompany = useMemo(() => companies.find(c => c.id === currentCompany), [companies, currentCompany]);
+    const selectedEmployee = useMemo(() => funcionarios.find(f => f.id.toString() === selectedEmployeeId), [funcionarios, selectedEmployeeId]);
+
+    const handleAddRubrica = (type: 'provento' | 'desconto') => {
+        const newRubrica: Rubrica = { id: Date.now(), codigo: 'MANUAL', descricao: '', tipo: type === 'provento' ? 'Provento' : 'Desconto', incidencias: {inss: false, irrf: false, fgts: false, contribuicaoSindical: false}, value: 0 };
+        if (type === 'provento') {
+            setManualProventos(prev => [...prev, newRubrica]);
+        } else {
+            setManualDescontos(prev => [...prev, newRubrica]);
+        }
+    };
+    const handleUpdateRubrica = (type: 'provento' | 'desconto', id: number, field: 'descricao' | 'value', fieldValue: string | number) => {
+        const updater = (prev: Rubrica[]) => prev.map(r => r.id === id ? { ...r, [field]: fieldValue } : r);
+        if (type === 'provento') setManualProventos(updater);
+        else setManualDescontos(updater);
+    };
+    const handleRemoveRubrica = (type: 'provento' | 'desconto', id: number) => {
+        const remover = (prev: Rubrica[]) => prev.filter(r => r.id !== id);
+        if (type === 'provento') setManualProventos(remover);
+        else setManualDescontos(remover);
+    };
+
+    const handleCalculate = () => {
+        if (!selectedEmployee) {
+            toast({ variant: 'destructive', title: 'Funcionário não selecionado', description: 'Selecione um funcionário para calcular a folha.' });
+            return;
+        }
+        setIsLoading(true);
+        setCalculation(null);
+
+        setTimeout(() => {
+            const salarioBase = selectedEmployee.salario;
+            const diasMes = 30; // Simplificação para cálculo mensal
+
+            // Cálculo de Faltas e Horas Extras
+            const valorDia = salarioBase / diasMes;
+            const descontoFaltas = valorDia * faltas;
+
+            const valorHora = salarioBase / 220; // Carga horária padrão
+            const valorHE50 = valorHora * 1.5 * horasExtras50;
+            const valorHE100 = valorHora * 2 * horasExtras100;
+            
+            // Base de Cálculo INSS
+            const totalProventosSemManuais = salarioBase - descontoFaltas + valorHE50 + valorHE100;
+            const totalManualProventos = manualProventos.reduce((acc, p) => acc + (p.value || 0), 0);
+            const baseInss = totalProventosSemManuais + totalManualProventos;
+
+            // Cálculo INSS
+            let inss = 0;
+            for (const bracket of inssBrackets) {
+                if (baseInss <= bracket.limit) {
+                    inss = (baseInss * bracket.rate) - bracket.deduction;
+                    break;
+                }
+            }
+            inss = Math.min(parseFloat(inss.toFixed(2)), inssTeto);
+
+            // Base de Cálculo IRRF
+            const numDependentes = selectedEmployee.dependentes?.length || 0;
+            const deducaoDependentes = numDependentes * irrfDependenteDeduction;
+            const baseIrrf = baseInss - inss - deducaoDependentes;
+
+            // Cálculo IRRF (considerando dedução padrão vs simplificada)
+            let irrf = 0;
+            let irrfPadrao = 0;
+            for (const bracket of irrfBrackets) {
+                if (baseIrrf <= bracket.limit) {
+                    irrfPadrao = (baseIrrf * bracket.rate) - bracket.deduction;
+                    break;
+                }
+            }
+            
+            const baseIrrfSimplificada = baseInss - irrfSimplifiedDeduction;
+            let irrfSimplificado = 0;
+            for (const bracket of irrfBrackets) {
+                if (baseIrrfSimplificada <= bracket.limit) {
+                    irrfSimplificado = (baseIrrfSimplificada * bracket.rate) - bracket.deduction;
+                    break;
+                }
+            }
+            irrf = Math.max(0, parseFloat(Math.min(irrfPadrao, irrfSimplificado).toFixed(2)));
+            
+            // Montagem do resultado
+            const proventos: Rubrica[] = [
+                { id: 1, codigo: '101', descricao: 'Salário Base', tipo: 'Provento', value: salarioBase, incidencias: { inss: true, irrf: true, fgts: true, contribuicaoSindical: false } },
+            ];
+            if (valorHE50 > 0) proventos.push({ id: 2, codigo: '102', descricao: 'Horas Extras 50%', tipo: 'Provento', value: valorHE50, incidencias: { inss: true, irrf: true, fgts: true, contribuicaoSindical: false } });
+            if (valorHE100 > 0) proventos.push({ id: 3, codigo: '103', descricao: 'Horas Extras 100%', tipo: 'Provento', value: valorHE100, incidencias: { inss: true, irrf: true, fgts: true, contribuicaoSindical: false } });
+            proventos.push(...manualProventos.filter(p => p.value || 0 > 0));
+
+            const descontos: Rubrica[] = [];
+            if (descontoFaltas > 0) descontos.push({ id: 101, codigo: '201', descricao: `Faltas (${faltas} dias)`, tipo: 'Desconto', value: descontoFaltas, incidencias: { inss: true, irrf: true, fgts: true, contribuicaoSindical: false } });
+            if (inss > 0) descontos.push({ id: 102, codigo: '202', descricao: 'INSS', tipo: 'Desconto', value: inss, incidencias: { inss: false, irrf: false, fgts: false, contribuicaoSindical: false } });
+            if (irrf > 0) descontos.push({ id: 103, codigo: '203', descricao: 'IRRF', tipo: 'Desconto', value: irrf, incidencias: { inss: false, irrf: false, fgts: false, contribuicaoSindical: false } });
+            descontos.push(...manualDescontos.filter(d => d.value || 0 > 0));
+
+            const totalProventos = proventos.reduce((acc, p) => acc + (p.value || 0), 0);
+            const totalDescontos = descontos.reduce((acc, d) => acc + (d.value || 0), 0);
+            const liquido = totalProventos - totalDescontos;
+            
+            setCalculation({
+                proventos,
+                descontos,
+                totalProventos,
+                totalDescontos,
+                liquido,
+                baseInss,
+                baseIrrf,
+            });
+
+            setIsLoading(false);
+        }, 500);
+    };
+
+    const handleSaveCalculation = () => {
+        if (!calculation || !selectedEmployee || !competenceDate) {
+            toast({ variant: 'destructive', title: 'Cálculo incompleto', description: 'Realize um cálculo e selecione um funcionário/competência antes de salvar.' });
+            return;
+        }
+
+        const newSavedCalc: SavedCalculation = {
+            id: Date.now(),
+            type: 'Folha',
+            date: new Date().toISOString(),
+            mesCompetencia: format(competenceDate, 'MM/yyyy'),
+            employeeId: selectedEmployeeId,
+            employeeName: selectedEmployee.nome,
+            netValue: calculation.liquido,
+            faltas,
+            horasExtras50,
+            horasExtras100,
+            manualProventos,
+            manualDescontos,
+            calculation,
+        };
+
+        setSavedCalculations(prev => [newSavedCalc, ...prev]);
+        toast({ title: 'Cálculo Salvo!', description: 'O resultado foi salvo no histórico de cálculos.' });
+    };
+
+    const handleGeneratePdf = () => {
+         if (!calculation || !selectedEmployee || !activeCompany || !competenceDate) {
+            toast({ variant: 'destructive', title: 'Dados insuficientes', description: 'Realize um cálculo e selecione um funcionário para gerar o PDF.' });
+            return;
+        }
+        const doc = new jsPDF();
+        
+        let finalY = 20;
+
+        if (activeCompany.data?.logo) {
+            try { doc.addImage(activeCompany.data.logo, 'PNG', 14, finalY - 10, 25, 25); } 
+            catch (e) { console.error("Error adding logo to PDF:", e); }
+        }
+
+        doc.setFontSize(16);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Recibo de Pagamento de Salário', doc.internal.pageSize.width / 2, finalY, { align: 'center' });
+        finalY += 8;
+        
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Competência: ${format(competenceDate, 'MM/yyyy')}`, doc.internal.pageSize.width / 2, finalY, { align: 'center' });
+        finalY += 15;
+        
+        autoTable(doc, {
+            startY: finalY,
+            theme: 'plain',
+            styles: { fontSize: 8, cellPadding: 0.5 },
+            body: [
+                [
+                    { content: `Empresa: ${activeCompany.data?.razaoSocial || activeCompany.name}` },
+                    { content: `CNPJ: ${activeCompany.data?.cnpj || ''}`, styles: { halign: 'right' } }
+                ],
+                [
+                    { content: `Funcionário: ${selectedEmployee.nome}` },
+                    { content: `Cargo: ${selectedEmployee.cargo}`, styles: { halign: 'right' } }
+                ]
+            ],
+        });
+        finalY = (doc as any).lastAutoTable.finalY + 5;
+
+
+        const body = calculation.proventos.map(p => [p.codigo, p.descricao, '', formatCurrencyNoSymbol(p.value || 0), '']);
+        calculation.descontos.forEach(d => body.push([d.codigo, d.descricao, '', '', formatCurrencyNoSymbol(d.value || 0)]));
+        
+        autoTable(doc, {
+            startY: finalY,
+            head: [['Cód.', 'Descrição', 'Referência', 'Proventos', 'Descontos']],
+            body: body,
+            theme: 'grid',
+            headStyles: { fillColor: [240, 240, 240], textColor: 40, fontStyle: 'bold', fontSize: 8, cellPadding: 1 },
+            bodyStyles: { fontSize: 8, cellPadding: 1 },
+            columnStyles: {
+                2: { halign: 'right' },
+                3: { halign: 'right', textColor: [22, 163, 74] },
+                4: { halign: 'right', textColor: [220, 38, 38] }
+            }
+        });
+        finalY = (doc as any).lastAutoTable.finalY;
+
+        autoTable(doc, {
+            startY: finalY,
+            theme: 'grid',
+            body: [
+                [
+                    { content: 'Totais:', colSpan: 3, styles: { halign: 'right', fontStyle: 'bold' } },
+                    { content: formatCurrencyNoSymbol(calculation.totalProventos), styles: { halign: 'right', fontStyle: 'bold', textColor: [22, 163, 74] } },
+                    { content: formatCurrencyNoSymbol(calculation.totalDescontos), styles: { halign: 'right', fontStyle: 'bold', textColor: [220, 38, 38] } },
+                ],
+                [
+                    { content: 'Líquido a Receber:', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold', cellPadding: 1.5 } },
+                    { content: formatCurrency(calculation.liquido), styles: { halign: 'right', fontStyle: 'bold', cellPadding: 1.5, fontSize: 9 } },
+                ]
+            ],
+            bodyStyles: { fontSize: 8, cellPadding: 1 },
+        });
+        finalY = (doc as any).lastAutoTable.finalY + 10;
+        
+        autoTable(doc, {
+            startY: finalY,
+            theme: 'plain',
+            body: [[
+                `Salário Base: ${formatCurrency(selectedEmployee.salario)}`,
+                `Base INSS: ${formatCurrency(calculation.baseInss)}`,
+                `Base FGTS: ${formatCurrency(calculation.baseInss)}`,
+                `Base IRRF: ${formatCurrency(calculation.baseIrrf)}`,
+            ]],
+            bodyStyles: { fontSize: 7, textColor: 100, cellPadding: 0.5 },
+        });
+
+        doc.save(`Holerite_${selectedEmployee.nome.replace(/\s/g, '_')}_${format(competenceDate, 'MM_yyyy')}.pdf`);
+        toast({ title: 'PDF Gerado!', description: 'O holerite foi salvo com sucesso.' });
+    }
+    
+    const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const formatCurrencyNoSymbol = (value: number) => value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 
     return (
-        <Card>
-            <CardHeader>
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                    <CardTitle className="text-xl flex items-center gap-2">
-                        Folha de Pagamento
-                        <Info className="h-4 w-4 text-muted-foreground cursor-pointer" />
-                    </CardTitle>
-                     <div className="flex flex-wrap items-center gap-2">
-                        <Button variant="default"><Calculator className="mr-2 h-4 w-4" />Calcular</Button>
-                        <Button variant="outline"><Save className="mr-2 h-4 w-4" />Salvar</Button>
-                        <Button variant="outline"><FileDown className="mr-2 h-4 w-4" />PDF</Button>
-                    </div>
-                </div>
-                 <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-4 pt-6">
-                    <div className="col-span-1 md:col-span-2 lg:col-span-2 space-y-2">
-                        <Label htmlFor="employee">Empregado</Label>
-                        <Popover open={openEmployeeSelector} onOpenChange={setOpenEmployeeSelector}>
-                            <PopoverTrigger asChild>
-                                <Button
-                                variant="outline"
-                                role="combobox"
-                                aria-expanded={openEmployeeSelector}
-                                className="w-full justify-between"
-                                >
-                                {selectedEmployeeId
-                                    ? funcionarios.find((f) => f.id.toString() === selectedEmployeeId)?.nome
-                                    : "Selecione um funcionário..."}
-                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                                <Command>
-                                <CommandInput placeholder="Pesquisar funcionário..." />
-                                <CommandList>
-                                    <CommandEmpty>Nenhum funcionário encontrado.</CommandEmpty>
-                                    <CommandGroup>
-                                        {funcionarios.map((f) => (
-                                            <CommandItem
-                                            key={f.id}
-                                            value={f.nome}
-                                            onSelect={() => {
-                                                setSelectedEmployeeId(f.id.toString() === selectedEmployeeId ? "" : f.id.toString());
-                                                setOpenEmployeeSelector(false);
-                                            }}
-                                            >
-                                            <Check
-                                                className={cn(
-                                                "mr-2 h-4 w-4",
-                                                selectedEmployeeId === f.id.toString() ? "opacity-100" : "opacity-0"
-                                                )}
-                                            />
-                                            {f.nome}
-                                            </CommandItem>
-                                        ))}
-                                    </CommandGroup>
-                                </CommandList>
-                                </Command>
-                            </PopoverContent>
-                        </Popover>
-                    </div>
-                     <div className="col-span-1 md:col-span-2 lg:col-span-2 space-y-2">
-                        <Label>Período</Label>
-                         <div className="flex items-center gap-2">
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <Button
-                                        variant={"outline"}
-                                        className={cn("w-full justify-start text-left font-normal", !competenceDate && "text-muted-foreground")}
-                                    >
-                                        <CalendarIcon className="mr-2 h-4 w-4" />
-                                        {competenceDate ? format(competenceDate, "MM/yyyy", { locale: ptBR }) : <span>Selecione o mês</span>}
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0">
-                                    <Calendar
-                                        mode="single"
-                                        selected={competenceDate}
-                                        onSelect={setCompetenceDate}
-                                        initialFocus
-                                        locale={ptBR}
-                                    />
-                                </PopoverContent>
-                            </Popover>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="lg:col-span-1 space-y-6">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>1. Parâmetros de Cálculo</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="employee">Empregado</Label>
+                                <Popover open={openEmployeeSelector} onOpenChange={setOpenEmployeeSelector}>
+                                    <PopoverTrigger asChild>
+                                        <Button variant="outline" role="combobox" aria-expanded={openEmployeeSelector} className="w-full justify-between">
+                                            {selectedEmployeeId ? funcionarios.find((f) => f.id.toString() === selectedEmployeeId)?.nome : "Selecione..."}
+                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                                        <Command><CommandInput placeholder="Pesquisar..." /><CommandList><CommandEmpty>Nenhum funcionário.</CommandEmpty><CommandGroup>
+                                            {funcionarios.map((f) => (
+                                                <CommandItem key={f.id} value={f.nome} onSelect={() => { setSelectedEmployeeId(f.id.toString()); setOpenEmployeeSelector(false); }}>
+                                                    <Check className={cn("mr-2 h-4 w-4", selectedEmployeeId === f.id.toString() ? "opacity-100" : "opacity-0")} />
+                                                    {f.nome}
+                                                </CommandItem>
+                                            ))}
+                                        </CommandGroup></CommandList></Command>
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Competência</Label>
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !competenceDate && "text-muted-foreground")}>
+                                            <CalendarIcon className="mr-2 h-4 w-4" />
+                                            {competenceDate ? format(competenceDate, "MM/yyyy", { locale: ptBR }) : <span>Selecione</span>}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={competenceDate} onSelect={setCompetenceDate} initialFocus locale={ptBR} /></PopoverContent>
+                                </Popover>
+                            </div>
                         </div>
-                    </div>
-                     <div className="col-span-2 md:col-span-2 lg:col-span-1 flex items-end justify-end">
-                         
-                    </div>
-                     <div className="col-span-1 lg:col-span-1 space-y-2">
-                        <Label htmlFor="origin">Origem</Label>
-                         <Select defaultValue="todas">
-                            <SelectTrigger id="origin">
-                                <SelectValue placeholder="Todas" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="todas">Todas</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                </div>
-            </CardHeader>
-            <CardContent>
-                <div className="rounded-md border">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead className="w-24"></TableHead>
-                                <TableHead className="w-24">Data</TableHead>
-                                <TableHead className="w-20">Evento</TableHead>
-                                <TableHead>Histórico</TableHead>
-                                <TableHead className="w-28 text-center">Incidências</TableHead>
-                                <TableHead className="w-24 text-right">Referência</TableHead>
-                                <TableHead className="w-32 text-right">Rendimento</TableHead>
-                                <TableHead className="w-32 text-right">Desconto</TableHead>
-                            </TableRow>
-                             <TableRow>
-                                <TableCell className="p-1">
-                                    <Button variant="ghost" size="icon"><Filter className="h-4 w-4"/></Button>
-                                </TableCell>
-                                <TableCell className="p-1" colSpan={3}>
-                                     <div className="relative">
-                                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                                        <Input placeholder="Pesquisar por histórico..." className="pl-9" />
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="faltas">Faltas (dias)</Label>
+                                <Input id="faltas" type="number" value={faltas} onChange={e => setFaltas(Number(e.target.value))} min={0} />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="he50">Horas Extras 50%</Label>
+                                <Input id="he50" type="number" value={horasExtras50} onChange={e => setHorasExtras50(Number(e.target.value))} min={0} />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="he100">Horas Extras 100%</Label>
+                                <Input id="he100" type="number" value={horasExtras100} onChange={e => setHorasExtras100(Number(e.target.value))} min={0} />
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                 <Card>
+                    <CardHeader><CardTitle>2. Lançamentos Manuais</CardTitle></CardHeader>
+                    <CardContent className="space-y-4">
+                        <div>
+                            <Label className='text-emerald-600'>Proventos</Label>
+                            <div className="space-y-2 mt-2">
+                                {manualProventos.map(p => (
+                                    <div key={p.id} className="flex gap-2 items-center">
+                                        <Input placeholder="Descrição do provento" value={p.descricao} onChange={(e) => handleUpdateRubrica('provento', p.id, 'descricao', e.target.value)} />
+                                        <MoneyInput id={`provento-${p.id}`} value={p.value || 0} onValueChange={(val) => handleUpdateRubrica('provento', p.id, 'value', val)} />
+                                        <Button variant="ghost" size="icon" onClick={() => handleRemoveRubrica('provento', p.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                                     </div>
-                                </TableCell>
-                                <TableCell className="p-1" colSpan={4}></TableCell>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {events.map((event) => (
-                                <TableRow key={event.id}>
-                                    <TableCell className="flex items-center gap-1">
-                                        <Checkbox checked={event.type === 'provento'} className="data-[state=checked]:bg-emerald-600 border-emerald-600" />
-                                        <Checkbox checked={event.type === 'desconto'} className="data-[state=checked]:bg-red-600 border-red-600"/>
-                                        <Button variant="ghost" size="icon" className="h-6 w-6"><Info className="h-4 w-4"/></Button>
-                                        <Button variant="ghost" size="icon" className="h-6 w-6"><Trash2 className="h-4 w-4 text-destructive"/></Button>
-                                    </TableCell>
-                                    <TableCell>{new Date(2023, 5, 14).toLocaleDateString('pt-BR')}</TableCell>
-                                    <TableCell>{event.code}</TableCell>
-                                    <TableCell className="font-medium">{event.description}</TableCell>
-                                    <TableCell>
-                                        <div className="flex justify-center items-center gap-2">
-                                            <BasisBadge active={event.calculationBasis.cp} label="C" />
-                                            <BasisBadge active={event.calculationBasis.fg} label="F" />
-                                            <BasisBadge active={event.calculationBasis.ir} label="I" />
-                                        </div>
-                                    </TableCell>
-                                    <TableCell className="text-right font-mono">{event.reference.toFixed(2).replace('.', ',')}</TableCell>
-                                    <TableCell className={`text-right font-mono ${event.provento > 0 ? 'text-emerald-600' : ''}`}>{event.provento.toFixed(2).replace('.', ',')}</TableCell>
-                                    <TableCell className={`text-right font-mono ${event.desconto > 0 ? 'text-red-600' : ''}`}>{event.desconto.toFixed(2).replace('.', ',')}</TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                         <TableFooter>
-                            <TableRow>
-                                <TableCell colSpan={6}></TableCell>
-                                <TableCell className="text-right font-bold font-mono">{totals.totalProventos.toFixed(2).replace('.', ',')}</TableCell>
-                                <TableCell className="text-right font-bold font-mono">{totals.totalDescontos.toFixed(2).replace('.', ',')}</TableCell>
-                            </TableRow>
-                             <TableRow>
-                                <TableCell colSpan={6} className="text-right font-bold text-lg">Líquido à Receber:</TableCell>
-                                <TableCell colSpan={2} className="text-right font-bold font-mono text-lg">{totals.liquido.toFixed(2).replace('.', ',')}</TableCell>
-                            </TableRow>
-                        </TableFooter>
-                    </Table>
-                </div>
-            </CardContent>
-            <CardFooter className="flex items-center justify-between">
-                 <div className="flex items-center gap-2">
-                    <Select defaultValue="30">
-                        <SelectTrigger className="w-32">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="10">10 / Página</SelectItem>
-                            <SelectItem value="30">30 / Página</SelectItem>
-                            <SelectItem value="50">50 / Página</SelectItem>
-                        </SelectContent>
-                    </Select>
-                     <p className="text-sm text-muted-foreground">
-                        3 Registros
-                    </p>
-                </div>
-                <div className="flex items-center gap-2">
-                    <Button variant="outline" size="icon" disabled><ChevronsLeft className="h-4 w-4" /></Button>
-                    <Button variant="outline" size="icon" disabled><ChevronLeft className="h-4 w-4" /></Button>
-                    <Input className="w-16 text-center" defaultValue="1" />
-                     <span className="text-muted-foreground">/ 1</span>
-                    <Button variant="outline" size="icon" disabled><ChevronRight className="h-4 w-4" /></Button>
-                    <Button variant="outline" size="icon" disabled><ChevronsRight className="h-4 w-4" /></Button>
-                </div>
-            </CardFooter>
-        </Card>
+                                ))}
+                                <Button variant="outline" size="sm" className="w-full" onClick={() => handleAddRubrica('provento')}><Plus className="mr-2 h-4 w-4" />Adicionar Provento</Button>
+                            </div>
+                        </div>
+                         <div>
+                            <Label className='text-red-600'>Descontos</Label>
+                             <div className="space-y-2 mt-2">
+                                {manualDescontos.map(d => (
+                                    <div key={d.id} className="flex gap-2 items-center">
+                                        <Input placeholder="Descrição do desconto" value={d.descricao} onChange={(e) => handleUpdateRubrica('desconto', d.id, 'descricao', e.target.value)} />
+                                        <MoneyInput id={`desconto-${d.id}`} value={d.value || 0} onValueChange={(val) => handleUpdateRubrica('desconto', d.id, 'value', val)} />
+                                        <Button variant="ghost" size="icon" onClick={() => handleRemoveRubrica('desconto', d.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                                    </div>
+                                ))}
+                                <Button variant="outline" size="sm" className="w-full" onClick={() => handleAddRubrica('desconto')}><Plus className="mr-2 h-4 w-4" />Adicionar Desconto</Button>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+                 <Button onClick={handleCalculate} disabled={!selectedEmployeeId || isLoading} className="w-full" size="lg">
+                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Calculator className="mr-2 h-4 w-4" />}
+                    {isLoading ? "Calculando..." : "Calcular Folha"}
+                </Button>
+            </div>
+            <div className="lg:col-span-1">
+                 <Card className="min-h-full sticky top-24">
+                    <CardHeader>
+                        <CardTitle>3. Holerite</CardTitle>
+                        <CardDescription>Resultado do cálculo da folha de pagamento.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {calculation ? (
+                            <div>
+                                <div className='flex justify-between items-center mb-4 p-4 bg-muted/50 rounded-lg'>
+                                    <div>
+                                        <p className='font-bold text-lg'>{selectedEmployee?.nome || 'Funcionário'}</p>
+                                        <p className='text-sm text-muted-foreground'>Recibo de Pagamento de Salário</p>
+                                    </div>
+                                    <div className='text-right'>
+                                        <Badge variant="outline">{competenceDate ? format(competenceDate, 'MM/yyyy') : ''}</Badge>
+                                    </div>
+                                </div>
+                                <Table>
+                                    <TableHeader><TableRow><TableHead>Descrição</TableHead><TableHead className="text-right">Proventos</TableHead><TableHead className="text-right">Descontos</TableHead></TableRow></TableHeader>
+                                    <TableBody>
+                                        {calculation.proventos.map(item => (<TableRow key={`p-${item.id}`}><TableCell className="font-medium">{item.descricao}</TableCell><TableCell className="text-right font-mono text-emerald-600">{formatCurrencyNoSymbol(item.value || 0)}</TableCell><TableCell></TableCell></TableRow>))}
+                                        {calculation.descontos.map(item => (<TableRow key={`d-${item.id}`}><TableCell className="font-medium">{item.descricao}</TableCell><TableCell></TableCell><TableCell className="text-right font-mono text-red-600">{formatCurrencyNoSymbol(item.value || 0)}</TableCell></TableRow>))}
+                                    </TableBody>
+                                    <TableFooter>
+                                        <TableRow className="font-bold"><TableCell>Totais</TableCell><TableCell className="text-right font-mono text-emerald-600">{formatCurrencyNoSymbol(calculation.totalProventos)}</TableCell><TableCell className="text-right font-mono text-red-600">{formatCurrencyNoSymbol(calculation.totalDescontos)}</TableCell></TableRow>
+                                    </TableFooter>
+                                </Table>
+                                <div className='mt-6 flex justify-between items-center font-bold text-lg p-4 bg-muted rounded-lg'>
+                                    <span>Valor Líquido</span><span className="font-mono text-xl">{formatCurrency(calculation.liquido)}</span>
+                                </div>
+                                <div className="mt-4 grid grid-cols-2 gap-4 text-xs text-muted-foreground">
+                                    <p>Base INSS: <span className='font-mono'>{formatCurrency(calculation.baseInss)}</span></p><p>Base IRRF: <span className='font-mono'>{formatCurrency(calculation.baseIrrf)}</span></p>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col items-center justify-center text-center p-8 text-muted-foreground min-h-[400px]">
+                                <Calculator className="h-12 w-12 mb-4" />
+                                <p className="font-medium">Preencha os dados e clique em "Calcular Folha"</p>
+                                <p className="text-sm">O resultado do cálculo aparecerá aqui.</p>
+                            </div>
+                        )}
+                    </CardContent>
+                    {calculation && (
+                        <CardFooter className="justify-end gap-2 border-t pt-6 mt-4">
+                            <Button variant="outline" onClick={handleSaveCalculation}><Save className="mr-2 h-4 w-4" /> Salvar</Button>
+                            <Button onClick={handleGeneratePdf}><FileDown className="mr-2 h-4 w-4" /> Gerar PDF</Button>
+                        </CardFooter>
+                    )}
+                </Card>
+            </div>
+        </div>
     );
 }
+
