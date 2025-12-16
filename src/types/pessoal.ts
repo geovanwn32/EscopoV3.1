@@ -1,6 +1,7 @@
 
 
 
+
 export interface Dependente {
     id: number;
     nome: string;
@@ -110,7 +111,8 @@ export interface SavedCalculation {
     faltas?: number;
     horasExtras50?: number;
     horasExtras100?: number;
-    calculation?: CalculationResult | null;
+    calculation: CalculationResult;
 }
+
 
 
