@@ -5,7 +5,7 @@ import { useState, useEffect, ChangeEvent, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { PackagePlus, Wrench, Upload, FileMinus, Receipt, MoreHorizontal, Search, Filter, Plus, FileUp, Trash2, X, Eye, Pencil, ChevronsUpDown, Check } from "lucide-react";
+import { PackagePlus, Wrench, Upload, FileMinus, Receipt, MoreHorizontal, Search, Filter, Plus, FileUp, Trash2, X, Eye, Pencil, ChevronsUpDown, Check, Calculator } from "lucide-react";
 import Link from "next/link";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -58,12 +58,12 @@ const actions = [
         href: "#",
         color: "text-indigo-600 bg-indigo-100/80 group-hover:bg-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-400 dark:group-hover:bg-indigo-500",
     },
-    {
-        id: "recibos",
-        icon: <Receipt className="h-8 w-8" />,
-        label: "Recibos/Cupons",
-        href: "#",
-        color: "text-slate-600 bg-slate-100/80 group-hover:bg-slate-600 dark:bg-slate-700/40 dark:text-slate-400 dark:group-hover:bg-slate-500",
+     {
+        id: "apurar-impostos",
+        icon: <Calculator className="h-8 w-8" />,
+        label: "Apurar Impostos",
+        href: "/fiscal/apuracao",
+        color: "text-purple-600 bg-purple-100/80 group-hover:bg-purple-600 dark:bg-purple-900/40 dark:text-purple-400 dark:group-hover:bg-purple-500",
     },
 ]
 
@@ -502,6 +502,7 @@ export default function FiscalPage() {
                                     action.id === 'nota-produto' ? () => openLancamentoDialog('produto') :
                                     action.id === 'nota-saida' ? () => openLancamentoDialog('saida') :
                                     action.id === 'nota-servico' ? () => openLancamentoDialog('servico') :
+                                    action.id === 'apurar-impostos' ? () => router.push('/fiscal/apuracao') :
                                     undefined
                                 }
                             />
@@ -622,6 +623,17 @@ function ActionTile({
     onFileChange?: (event: React.ChangeEvent<HTMLInputElement>) => void,
     onActionClick?: () => void
 }) {
+    const router = useRouter();
+
+    const handleClick = () => {
+        if (onActionClick) {
+            onActionClick();
+        } else if (href && href !== '#') {
+            router.push(href);
+        }
+    };
+
+
     const tileContent = (
         <div className="group flex h-full cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border bg-card p-6 text-card-foreground shadow-sm transition-all hover:-translate-y-1 hover:shadow-md">
             <div className={cn(
@@ -652,19 +664,11 @@ function ActionTile({
             </div>
         );
     }
-    
-    if (onActionClick) {
-         return (
-            <button onClick={onActionClick} className="w-full h-full text-left">
-                {tileContent}
-            </button>
-        )
-    }
 
     return (
-        <Link href={href}>
-           {tileContent}
-        </Link>
+        <button onClick={handleClick} className="w-full h-full text-left">
+            {tileContent}
+        </button>
     )
 }
 
