@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCompany } from '@/hooks/use-company';
 import { Funcionario } from '@/types/pessoal';
-import { Plus, Trash2, Info, RefreshCw, X, Copy, Wand2, Paperclip, Calendar as CalendarIcon, MoreHorizontal, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Filter, Search } from 'lucide-react';
+import { Plus, Trash2, Info, RefreshCw, X, Copy, Wand2, Paperclip, Calendar as CalendarIcon, MoreHorizontal, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Filter, Search, Check, ChevronsUpDown } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHeader, TableRow, TableHead, TableFooter } from '@/components/ui/table';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -17,6 +17,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 
 
 interface PayrollEvent {
@@ -41,6 +42,7 @@ export default function PayrollCalculator() {
     const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
     const [calculationType, setCalculationType] = useState('mensal');
     const [competenceDate, setCompetenceDate] = useState<Date | undefined>(new Date());
+    const [openEmployeeSelector, setOpenEmployeeSelector] = useState(false);
     
     const initialEvents: PayrollEvent[] = [
         { id: 1, type: 'provento', code: 1, description: 'SALÁRIO BASE', reference: 17.00, calculationBasis: { cp: true, fg: true, ir: true }, provento: 1133.33, desconto: 0 },
@@ -83,29 +85,53 @@ export default function PayrollCalculator() {
                  <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-4 pt-6">
                     <div className="col-span-1 md:col-span-2 lg:col-span-2 space-y-2">
                         <Label htmlFor="employee">Empregado</Label>
-                        <Select value={selectedEmployeeId} onValueChange={setSelectedEmployeeId}>
-                            <SelectTrigger id="employee">
-                                <SelectValue placeholder="Funcionário Teste - 1" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {funcionarios.map(f => <SelectItem key={f.id} value={f.id.toString()}>{f.nome}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
+                        <Popover open={openEmployeeSelector} onOpenChange={setOpenEmployeeSelector}>
+                            <PopoverTrigger asChild>
+                                <Button
+                                variant="outline"
+                                role="combobox"
+                                aria-expanded={openEmployeeSelector}
+                                className="w-full justify-between"
+                                >
+                                {selectedEmployeeId
+                                    ? funcionarios.find((f) => f.id.toString() === selectedEmployeeId)?.nome
+                                    : "Selecione um funcionário..."}
+                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                                <Command>
+                                <CommandInput placeholder="Pesquisar funcionário..." />
+                                <CommandList>
+                                    <CommandEmpty>Nenhum funcionário encontrado.</CommandEmpty>
+                                    <CommandGroup>
+                                        {funcionarios.map((f) => (
+                                            <CommandItem
+                                            key={f.id}
+                                            value={f.nome}
+                                            onSelect={() => {
+                                                setSelectedEmployeeId(f.id.toString() === selectedEmployeeId ? "" : f.id.toString());
+                                                setOpenEmployeeSelector(false);
+                                            }}
+                                            >
+                                            <Check
+                                                className={cn(
+                                                "mr-2 h-4 w-4",
+                                                selectedEmployeeId === f.id.toString() ? "opacity-100" : "opacity-0"
+                                                )}
+                                            />
+                                            {f.nome}
+                                            </CommandItem>
+                                        ))}
+                                    </CommandGroup>
+                                </CommandList>
+                                </Command>
+                            </PopoverContent>
+                        </Popover>
                     </div>
                      <div className="col-span-1 md:col-span-2 lg:col-span-2 space-y-2">
                         <Label>Período</Label>
                          <div className="flex items-center gap-2">
-                             <Select value={calculationType} onValueChange={setCalculationType}>
-                                <SelectTrigger className='w-[150px]'>
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="mensal">Folha Mensal</SelectItem>
-                                    <SelectItem value="adiantamento">Adiantamento</SelectItem>
-                                    <SelectItem value="ferias">Férias</SelectItem>
-                                    <SelectItem value="13-salario">13º Salário</SelectItem>
-                                </SelectContent>
-                            </Select>
                             <Popover>
                                 <PopoverTrigger asChild>
                                     <Button
