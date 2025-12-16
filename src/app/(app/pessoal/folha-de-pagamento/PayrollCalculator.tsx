@@ -7,11 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCompany } from '@/hooks/use-company';
-import { Funcionario, Rubrica } from '@/types/pessoal';
-import { Calculator, ArrowRight, Receipt, Loader2, Plus, Trash2, ArrowDownCircle, ArrowUpCircle, Info, RefreshCw, X, Copy, Wand2, Paperclip, Calendar, MoreHorizontal, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Filter, Search } from 'lucide-react';
+import { Funcionario } from '@/types/pessoal';
+import { Plus, Trash2, Info, RefreshCw, X, Copy, Wand2, Paperclip, Calendar, MoreHorizontal, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Filter, Search } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHeader, TableRow, TableHead, TableFooter } from '@/components/ui/table';
-import { Separator } from '@/components/ui/separator';
-import { MoneyInput } from '@/components/ui/money-input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
@@ -90,17 +88,7 @@ export default function PayrollCalculator() {
                      <div className="col-span-1 md:col-span-2 lg:col-span-2 space-y-2">
                         <Label htmlFor="period">Período</Label>
                         <div className="flex items-center gap-1">
-                            <Select defaultValue="2023-06-mensal">
-                                <SelectTrigger id="period">
-                                    <SelectValue placeholder="Selecione o período" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="2023-06-mensal">Jun/2023 - Mensal</SelectItem>
-                                    <SelectItem value="2023-06-quinzenal1">Jun/2023 - 1ª Quinzena</SelectItem>
-                                    <SelectItem value="2023-06-quinzenal2">Jun/2023 - 2ª Quinzena</SelectItem>
-                                    <SelectItem value="2023-05-mensal">Mai/2023 - Mensal</SelectItem>
-                                </SelectContent>
-                            </Select>
+                            <Input id="period" value="Período de: 14/06/2023 à 30/06/2023 - Mensal" readOnly />
                              <Popover>
                                 <PopoverTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></PopoverTrigger>
                                 <PopoverContent>...</PopoverContent>
@@ -225,3 +213,5 @@ export default function PayrollCalculator() {
         </Card>
     );
 }
+
+    
