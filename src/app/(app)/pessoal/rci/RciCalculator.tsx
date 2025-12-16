@@ -230,12 +230,12 @@ export default function RciCalculator() {
         if (!calculation || !selectedSocio || !activeCompany) return;
     
         const doc = new jsPDF();
-
+        const margin = 14;
+        const pageWidth = doc.internal.pageSize.width;
+        
         const drawReceipt = (startY: number) => {
             let finalY = startY;
-            const margin = 14;
-            const pageWidth = doc.internal.pageSize.width;
-    
+            
             // Header: Company Logo and Title
             if (activeCompany.data?.logo) {
                 try {
@@ -244,32 +244,66 @@ export default function RciCalculator() {
                     console.error("Error adding logo to PDF:", e);
                 }
             }
+            doc.setFontSize(14);
+            doc.setFont('helvetica', 'bold');
+            doc.text(activeCompany.data?.razaoSocial || activeCompany.name, margin + 25, finalY + 8);
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`Recibo de Pagamento - Pró-labore - Competência: ${mesCompetencia}`, margin + 25, finalY + 14);
 
-            autoTable(doc, {
-                startY: finalY,
-                theme: 'plain',
-                tableWidth: 'wrap',
-                margin: { left: margin + 25 },
-                body: [
-                    [{ content: activeCompany.data?.razaoSocial || activeCompany.name, styles: { fontStyle: 'bold', fontSize: 12 } }],
-                    [{ content: `Recibo de Pagamento - Pró-labore - Competência: ${mesCompetencia}`, styles: { fontSize: 10 } }],
-                ],
-                styles: { cellPadding: 0.5 }
-            });
+            finalY += 25;
+            
+            const addressString = [
+                activeCompany.data?.logradouro,
+                activeCompany.data?.numero,
+                activeCompany.data?.bairro,
+            ].filter(Boolean).join(', ');
+            const cityStateZip = [
+                 activeCompany.data?.cidade,
+                 activeCompany.data?.uf,
+                 activeCompany.data?.cep,
+            ].filter(Boolean).join(' - ');
 
-            finalY = (doc as any).lastAutoTable.finalY + 5;
-    
-            // Company and Partner Info Tables
+
             autoTable(doc, {
                 startY: finalY,
                 theme: 'plain',
                 body: [
                     [
-                        { content: `Empresa Pagadora:\nCNPJ: ${activeCompany.data?.cnpj || ''}`, styles: { fontStyle: 'bold', cellWidth: (pageWidth / 2) - margin } },
-                        { content: `Sócio / Beneficiário: ${selectedSocio.nome}\nCPF: ${selectedSocio.cpf} | NIT/PIS: ${selectedSocio.nit || 'Não informado'}`, styles: { fontStyle: 'bold', cellWidth: (pageWidth / 2) - margin } },
-                    ]
+                        { content: 'Empresa Pagadora', styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                    ],
+                    [
+                        { content: `Razão Social: ${activeCompany.data?.razaoSocial || activeCompany.name}` },
+                    ],
+                     [
+                        { content: `CNPJ: ${activeCompany.data?.cnpj || ''}` },
+                    ],
+                    [
+                        { content: `Endereço: ${addressString}` },
+                    ],
+                     [
+                        { content: `Município: ${cityStateZip}` },
+                    ],
                 ],
-                styles: { fontSize: 8, cellPadding: 0 }
+                styles: { fontSize: 8, cellPadding: 1 }
+            });
+            finalY = (doc as any).lastAutoTable.finalY + 2;
+            
+            autoTable(doc, {
+                startY: finalY,
+                theme: 'plain',
+                body: [
+                    [
+                        { content: 'Sócio / Beneficiário', styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } },
+                    ],
+                    [
+                        { content: `Nome: ${selectedSocio.nome}` },
+                    ],
+                     [
+                        { content: `CPF: ${selectedSocio.cpf} | NIT/PIS: ${selectedSocio.nit || 'Não informado'}` },
+                    ],
+                ],
+                styles: { fontSize: 8, cellPadding: 1 }
             });
             finalY = (doc as any).lastAutoTable.finalY + 2;
     
@@ -284,7 +318,7 @@ export default function RciCalculator() {
                 head: [['Código', 'Descrição', 'Proventos', 'Descontos']],
                 body: mainTableBody,
                 theme: 'grid',
-                headStyles: { fillColor: [240, 240, 240], textColor: 40, fontStyle: 'bold', fontSize: 8 },
+                headStyles: { fillColor: [220, 220, 220], textColor: 20, fontStyle: 'bold', fontSize: 8 },
                 bodyStyles: { fontSize: 9 },
                 columnStyles: {
                     0: { cellWidth: 20, halign: 'center' },
@@ -295,17 +329,22 @@ export default function RciCalculator() {
             finalY = (doc as any).lastAutoTable.finalY;
 
             // Summary Tables
+            const colWidths = (doc as any).lastAutoTable.columns.map((col: any) => col.width);
+            const totalLabelWidth = colWidths[0] + colWidths[1];
+
             autoTable(doc, {
                 startY: finalY,
                 theme: 'grid',
                 body: [
-                    [
-                        { content: 'Totais:', styles: { halign: 'right', fontStyle: 'bold', cellWidth: 104.8 } },
-                        { content: formatCurrencyNoSymbol(calculation.totalProventos), styles: { halign: 'right', fontStyle: 'bold', textColor: [22, 163, 74] } },
-                        { content: formatCurrencyNoSymbol(calculation.totalDescontos), styles: { halign: 'right', fontStyle: 'bold', textColor: [220, 38, 38] } },
-                    ]
+                     [{
+                        content: 'Totais:',
+                        colSpan: 2,
+                        styles: { halign: 'right', fontStyle: 'bold' }
+                    },
+                    { content: formatCurrencyNoSymbol(calculation.totalProventos), styles: { halign: 'right', fontStyle: 'bold', textColor: [22, 163, 74] } },
+                    { content: formatCurrencyNoSymbol(calculation.totalDescontos), styles: { halign: 'right', fontStyle: 'bold', textColor: [220, 38, 38] } },
+                    ],
                 ],
-                columnStyles: { 1: { cellWidth: 38.6 }, 2: { cellWidth: 38.6 } },
                 bodyStyles: { fontSize: 9 },
             });
             
@@ -313,30 +352,41 @@ export default function RciCalculator() {
                 startY: (doc as any).lastAutoTable.finalY,
                 theme: 'grid',
                  body: [
-                     [{ content: 'Valor Líquido:', styles: { halign: 'right', fontStyle: 'bold' } },
+                     [{ content: 'Valor Líquido:', colSpan: 3, styles: { halign: 'right', fontStyle: 'bold' } },
                      { content: formatCurrency(calculation.liquido), styles: { halign: 'right', fontStyle: 'bold' } },]
                 ],
-                columnStyles: { 0: { cellWidth: 143.4 }, 1: { cellWidth: 38.6 } },
-                bodyStyles: { fontSize: 9 },
+                bodyStyles: { fontSize: 9, cellPadding: { top: 2, bottom: 2 } },
             });
 
              autoTable(doc, {
                 startY: (doc as any).lastAutoTable.finalY,
-                theme: 'grid',
+                theme: 'striped',
                  body: [
                     [
                         `Base INSS: ${formatCurrency(calculation.baseInss)}`,
                         `Base IRRF: ${formatCurrency(calculation.baseIrrf)}`,
                     ]
                 ],
-                bodyStyles: { fontSize: 7, textColor: 100 },
+                bodyStyles: { fontSize: 7, textColor: 100, cellPadding: 1 },
             });
 
             finalY = (doc as any).lastAutoTable.finalY + 5;
     
+            // Legal text
+            doc.setFontSize(7);
+            doc.setTextColor(150);
+            doc.text(
+                "Base Legal: A contribuição do Contribuinte Individual (sócio) para a Previdência Social (INSS) é de 11% sobre o valor do pró-labore, respeitando-se o teto de contribuição, conforme Lei nº 8.212/91. A retenção do Imposto de Renda na Fonte (IRRF) é calculada com base na tabela progressiva da Receita Federal.",
+                margin,
+                finalY,
+                { maxWidth: pageWidth - margin * 2, align: 'justify' }
+            );
+            finalY += 10;
+            
             // Signature
             const declarationText = `Declaro ter recebido o valor líquido de ${formatCurrency(calculation.liquido)}, referente ao pagamento de pró-labore da competência de ${mesCompetencia}, e que dou plena e total quitação do mesmo.`;
             doc.setFontSize(8);
+            doc.setTextColor(40);
             doc.text(declarationText, margin, finalY, { maxWidth: pageWidth - margin * 2 });
             finalY += 10;
     
@@ -345,13 +395,13 @@ export default function RciCalculator() {
             const firstSignatureX = margin;
             const secondSignatureX = margin + signatureWidth + 10;
 
-            doc.line(firstSignatureX, finalY, firstSignatureX + signatureWidth, finalY);
-            doc.text(activeCompany.data?.razaoSocial || activeCompany.name, firstSignatureX + signatureWidth / 2, finalY + 4, { align: 'center' });
-            doc.text('Pagador (Empresa)', firstSignatureX + signatureWidth / 2, finalY + 8, { align: 'center', fontSize: 7, textColor: 'gray' });
-
             doc.line(secondSignatureX, finalY, secondSignatureX + signatureWidth, finalY);
-            doc.text(selectedSocio.nome, secondSignatureX + signatureWidth / 2, finalY + 4, { align: 'center' });
-            doc.text('Beneficiário (Sócio)', secondSignatureX + signatureWidth / 2, finalY + 8, { align: 'center', fontSize: 7, textColor: 'gray' });
+            doc.text(activeCompany.data?.razaoSocial || activeCompany.name, secondSignatureX + signatureWidth / 2, finalY + 4, { align: 'center' });
+            doc.text('Pagador (Empresa)', secondSignatureX + signatureWidth / 2, finalY + 8, { align: 'center', fontSize: 7, textColor: 'gray' });
+
+            doc.line(firstSignatureX, finalY, firstSignatureX + signatureWidth, finalY);
+            doc.text(selectedSocio.nome, firstSignatureX + signatureWidth / 2, finalY + 4, { align: 'center' });
+            doc.text('Beneficiário (Sócio)', firstSignatureX + signatureWidth / 2, finalY + 8, { align: 'center', fontSize: 7, textColor: 'gray' });
         };
     
         // Draw the two receipts
@@ -544,4 +594,3 @@ export default function RciCalculator() {
         </div>
     );
 }
-
