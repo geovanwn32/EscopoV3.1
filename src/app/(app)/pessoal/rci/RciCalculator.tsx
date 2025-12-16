@@ -249,7 +249,6 @@ export default function RciCalculator() {
     
             finalY += 25;
     
-            // Company and Partner Info using two separate tables
             const companyAddress = [
                 activeCompany.data?.logradouro,
                 activeCompany.data?.numero,
@@ -306,6 +305,9 @@ export default function RciCalculator() {
             });
             finalY = (doc as any).lastAutoTable.finalY;
 
+            const totalsTable = (doc as any).lastAutoTable.doc.previous;
+            const totalsColWidths = totalsTable.columns.map((col: any) => col.width);
+
             // Summary Table
             autoTable(doc, {
                 startY: finalY,
@@ -318,13 +320,16 @@ export default function RciCalculator() {
                     ],
                 ],
                 columnStyles: { 
-                    0: { cellWidth: (doc as any).lastAutoTable.columns[0].width + (doc as any).lastAutoTable.columns[1].width, cellPadding: 1 },
-                    1: { cellWidth: (doc as any).lastAutoTable.columns[2].width, cellPadding: 1 },
-                    2: { cellWidth: (doc as any).lastAutoTable.columns[3].width, cellPadding: 1 },
+                    0: { cellWidth: totalsColWidths[0] + totalsColWidths[1] },
+                    1: { cellWidth: totalsColWidths[2] },
+                    2: { cellWidth: totalsColWidths[3] },
                 },
-                bodyStyles: { fontSize: 8, fontStyle: 'bold' },
+                bodyStyles: { fontSize: 8, fontStyle: 'bold', cellPadding: 1 },
             });
             finalY = (doc as any).lastAutoTable.finalY;
+
+            const liquidTable = (doc as any).lastAutoTable.doc.previous;
+            const liquidColWidths = liquidTable.columns.map((col: any) => col.width);
             
             autoTable(doc, {
                 startY: finalY,
@@ -336,8 +341,8 @@ export default function RciCalculator() {
                     ]
                 ],
                 columnStyles: {
-                     0: { cellWidth: (doc as any).lastAutoTable.columns[0].width + (doc as any).lastAutoTable.columns[1].width + (doc as any).lastAutoTable.columns[2].width, cellPadding: 1.5 },
-                     1: { cellWidth: (doc as any).lastAutoTable.columns[3].width, cellPadding: 1.5 }
+                     0: { cellWidth: liquidColWidths[0] + liquidColWidths[1], cellPadding: 1.5 },
+                     1: { cellWidth: liquidColWidths[2], cellPadding: 1.5 }
                 },
                  bodyStyles: { fontSize: 9 },
             });
@@ -359,7 +364,7 @@ export default function RciCalculator() {
             doc.setFontSize(6);
             doc.setTextColor(150);
             doc.text(
-                "Declaro ter recebido o valor líquido descrito neste recibo, dando plena e total quitação do mesmo. A contribuição do Contribuinte Individual (sócio) para a Previdência Social (INSS) é de 11% sobre o valor do pró-labore, respeitando-se o teto de contribuição. A retenção do IRRF é calculada com base na tabela progressiva.",
+                "Declaro ter recebido o valor líquido descrito neste recibo, dando plena e total quitação do mesmo. A contribuição do Contribuinte Individual (sócio) para a Previdência Social (INSS) é de 11% sobre o valor do pró-labore, respeitando-se o teto de contribuição.",
                 pageMargin, finalY,
                 { maxWidth: doc.internal.pageSize.width - pageMargin * 2, align: 'justify' }
             );
