@@ -73,13 +73,8 @@ export default function PayrollCalculator() {
                     </CardTitle>
                     <div className="flex flex-wrap items-center gap-2">
                         <Button variant="outline" size="icon"><Plus className="h-4 w-4" /></Button>
-                        <Button variant="outline" size="icon"><Copy className="h-4 w-4" /></Button>
                         <Button variant="outline" size="icon"><Trash2 className="h-4 w-4" /></Button>
-                        <Button variant="outline" size="icon"><Wand2 className="h-4 w-4" /></Button>
-                        <Button variant="outline" size="icon"><Info className="h-4 w-4" /></Button>
-                        <Button variant="outline" size="icon"><Paperclip className="h-4 w-4" /></Button>
-                        <Button variant="outline" size="icon"><CalendarIcon className="h-4 w-4" /></Button>
-                        <Button variant="default">PG</Button>
+                        <Button variant="default">Calcular</Button>
                     </div>
                 </div>
                  <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-4 pt-6">
@@ -155,13 +150,7 @@ export default function PayrollCalculator() {
                         </div>
                     </div>
                      <div className="col-span-2 md:col-span-2 lg:col-span-1 flex items-end justify-end">
-                         <div className="flex items-center">
-                            <p className="text-sm text-muted-foreground whitespace-nowrap">01 de 1 Registro</p>
-                            <Button variant="ghost" size="icon" disabled><ChevronsLeft className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="icon" disabled><ChevronLeft className="h-4 w-4" /></Button>
-                             <Button variant="ghost" size="icon"><ChevronRight className="h-4 w-4" /></Button>
-                             <Button variant="ghost" size="icon"><ChevronsRight className="h-4 w-4" /></Button>
-                        </div>
+                         
                     </div>
                      <div className="col-span-1 lg:col-span-1 space-y-2">
                         <Label htmlFor="origin">Origem</Label>
