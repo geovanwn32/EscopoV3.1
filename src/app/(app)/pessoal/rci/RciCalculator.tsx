@@ -1,13 +1,15 @@
 
 'use client';
 import { useState, useMemo, useEffect } from 'react';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Calculator, Loader2, ArrowDownCircle, ArrowUpCircle, ArrowRight, Plus, Trash2, Save, FileDown, ArrowLeft } from 'lucide-react';
+import { Calculator, Loader2, ArrowRight, Plus, Trash2, Save, FileDown, ArrowLeft } from 'lucide-react';
 import { Table, TableBody, TableCell, TableRow, TableFooter, TableHead, TableHeader } from '@/components/ui/table';
-import { Separator } from '@/components/ui/separator';
 import { MoneyInput } from '@/components/ui/money-input';
 import { Badge } from '@/components/ui/badge';
 import { useCompany } from '@/hooks/use-company';
@@ -19,11 +21,10 @@ import { useToast } from '@/hooks/use-toast';
 import { Rubrica, CalculationResult, SavedCalculation } from '@/types/pessoal';
 import Link from 'next/link';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 
-
-// Simplified tax brackets for demonstration
 const inssRate = 0.11;
-const inssTeto = 7786.02; // Teto de contribuição do INSS
+const inssTeto = 7786.02;
 const inssValorTeto = inssTeto * inssRate;
 
 const irrfBrackets = [
@@ -35,6 +36,29 @@ const irrfBrackets = [
 ];
 const irrfSimplifiedDeduction = 564.80;
 
+const rciFormSchema = z.object({
+  selectedSocioId: z.string().min(1, 'Selecione um sócio.'),
+  mesCompetencia: z.string().regex(/^\d{2}\/\d{4}$/, 'Formato de data inválido. Use MM/AAAA.'),
+  proLaboreValue: z.number().min(0.01, 'O valor deve ser maior que zero.'),
+  manualProventos: z.array(z.object({
+    id: z.number(),
+    descricao: z.string(),
+    value: z.number().optional(),
+    codigo: z.string(),
+    tipo: z.string(),
+    incidencias: z.any()
+  })).optional(),
+  manualDescontos: z.array(z.object({
+    id: z.number(),
+    descricao: z.string(),
+    value: z.number().optional(),
+    codigo: z.string(),
+    tipo: z.string(),
+    incidencias: z.any()
+  })).optional(),
+});
+
+type RciFormValues = z.infer<typeof rciFormSchema>;
 
 export default function RciCalculator() {
     const { toast } = useToast();
@@ -42,18 +66,23 @@ export default function RciCalculator() {
     const [socios] = useScopedData<Socio[]>('cadastros-socios', []);
     const [savedCalculations, setSavedCalculations] = useScopedData<SavedCalculation[]>('pessoal-calculos-salvos', []);
     
-    const [selectedSocioId, setSelectedSocioId] = useState<string>('');
-    const [proLaboreValue, setProLaboreValue] = useState<number>(0);
-    const [mesCompetencia, setMesCompetencia] = useState<string>(`${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()}`);
-    
-    const [manualProventos, setManualProventos] = useState<Rubrica[]>([]);
-    const [manualDescontos, setManualDescontos] = useState<Rubrica[]>([]);
-
     const [isLoading, setIsLoading] = useState(false);
     const [calculation, setCalculation] = useState<CalculationResult | null>(null);
 
     const activeCompany = useMemo(() => companies.find(c => c.id === currentCompany), [companies, currentCompany]);
 
+    const form = useForm<RciFormValues>({
+        resolver: zodResolver(rciFormSchema),
+        defaultValues: {
+            selectedSocioId: '',
+            mesCompetencia: `${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()}`,
+            proLaboreValue: 0,
+            manualProventos: [],
+            manualDescontos: [],
+        },
+    });
+
+    const selectedSocioId = form.watch('selectedSocioId');
     const selectedSocio = useMemo(() => {
         return socios.find(s => s.id.toString() === selectedSocioId);
     }, [selectedSocioId, socios]);
@@ -63,87 +92,64 @@ export default function RciCalculator() {
         if (editDataString) {
             const editData: SavedCalculation = JSON.parse(editDataString);
             if (editData.type === 'RCI') {
-                setSelectedSocioId(editData.socioId || '');
-                setProLaboreValue(editData.proLaboreValue || 0);
-                setMesCompetencia(editData.mesCompetencia || `${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()}`);
-                setManualProventos(editData.manualProventos || []);
-                setManualDescontos(editData.manualDescontos || []);
-                handleCalculate(
-                    editData.proLaboreValue || 0,
-                    editData.manualProventos || [],
-                    editData.manualDescontos || []
-                );
+                form.reset({
+                    selectedSocioId: editData.socioId || '',
+                    mesCompetencia: editData.mesCompetencia || `${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()}`,
+                    proLaboreValue: editData.proLaboreValue || 0,
+                    manualProventos: editData.manualProventos || [],
+                    manualDescontos: editData.manualDescontos || [],
+                });
+                handleCalculate(editData.proLaboreValue || 0, editData.manualProventos || [], editData.manualDescontos || []);
             }
             sessionStorage.removeItem('edit-calculation');
         }
-    }, []);
+    }, [form]);
 
     useEffect(() => {
         if (selectedSocio) {
-            setProLaboreValue(selectedSocio.proLabore || 0);
+            form.setValue('proLaboreValue', selectedSocio.proLabore || 0);
         } else {
-            setProLaboreValue(0);
+            form.setValue('proLaboreValue', 0);
         }
         setCalculation(null);
-        setManualProventos([]);
-        setManualDescontos([]);
-    }, [selectedSocio]);
+        form.setValue('manualProventos', []);
+        form.setValue('manualDescontos', []);
+    }, [selectedSocio, form]);
 
     const handleAddRubrica = (type: 'provento' | 'desconto') => {
+        const fieldName = type === 'provento' ? 'manualProventos' : 'manualDescontos';
+        const currentValues = form.getValues(fieldName) || [];
         const newRubrica: Rubrica = { id: Date.now(), descricao: '', value: 0, codigo: '', tipo: 'Provento', incidencias: {inss: false, irrf: false, fgts: false, contribuicaoSindical: false} };
-        if (type === 'provento') {
-            setManualProventos(prev => [...prev, newRubrica]);
-        } else {
-            setManualDescontos(prev => [...prev, newRubrica]);
-        }
+        form.setValue(fieldName, [...currentValues, newRubrica]);
     };
 
     const handleUpdateRubrica = (type: 'provento' | 'desconto', id: number, field: 'descricao' | 'value', fieldValue: string | number) => {
-        const updater = (prev: Rubrica[]) => prev.map(r => 
-            r.id === id ? { ...r, [field]: fieldValue } : r
-        );
-        if (type === 'provento') {
-            setManualProventos(updater);
-        } else {
-            setManualDescontos(updater);
-        }
+        const fieldName = type === 'provento' ? 'manualProventos' : 'manualDescontos';
+        const currentValues = form.getValues(fieldName) || [];
+        const updatedValues = currentValues.map(r => r.id === id ? { ...r, [field]: fieldValue } : r);
+        form.setValue(fieldName, updatedValues);
     };
 
     const handleRemoveRubrica = (type: 'provento' | 'desconto', id: number) => {
-        const remover = (prev: Rubrica[]) => prev.filter(r => r.id !== id);
-        if (type === 'provento') {
-            setManualProventos(remover);
-        } else {
-            setManualDescontos(remover);
-        }
+        const fieldName = type === 'provento' ? 'manualProventos' : 'manualDescontos';
+        const currentValues = form.getValues(fieldName) || [];
+        form.setValue(fieldName, currentValues.filter(r => r.id !== id));
     };
 
-
     const handleCalculate = (
-        currentProLabore = proLaboreValue, 
-        currentProventos = manualProventos, 
-        currentDescontos = manualDescontos
+        currentProLabore: number, 
+        currentProventos: Rubrica[] = [], 
+        currentDescontos: Rubrica[] = []
     ) => {
-        if (currentProLabore <= 0) {
-            toast({ variant: 'destructive', title: 'Valor inválido', description: 'O valor do pró-labore deve ser maior que zero.' });
-            return;
-        }
-
         setIsLoading(true);
         setCalculation(null);
 
-        // Simulate calculation delay
         setTimeout(() => {
             const totalManualProventos = currentProventos.reduce((acc, p) => acc + (p.value || 0), 0);
             const totalManualDescontos = currentDescontos.reduce((acc, p) => acc + (p.value || 0), 0);
-
             const baseInss = currentProLabore + totalManualProventos;
-
-            // INSS Calculation
             let inss = baseInss > inssTeto ? inssValorTeto : baseInss * inssRate;
             inss = parseFloat(inss.toFixed(2));
-
-            // IRRF Calculation
             const baseIrrf = baseInss - inss;
             
             let irrfFromStandardDeduction = 0;
@@ -184,18 +190,13 @@ export default function RciCalculator() {
                 ...currentDescontos.filter(d => d.descricao && (d.value || 0) > 0),
             ];
 
-            setCalculation({
-                proventos,
-                descontos,
-                totalProventos,
-                totalDescontos,
-                liquido,
-                baseInss,
-                baseIrrf
-            });
-
+            setCalculation({ proventos, descontos, totalProventos, totalDescontos, liquido, baseInss, baseIrrf });
             setIsLoading(false);
         }, 500);
+    }
+    
+    const onFormSubmit = (data: RciFormValues) => {
+        handleCalculate(data.proLaboreValue, data.manualProventos, data.manualDescontos);
     }
 
     const handleSaveCalculation = () => {
@@ -204,17 +205,18 @@ export default function RciCalculator() {
             return;
         }
 
+        const formData = form.getValues();
         const newSavedCalc: SavedCalculation = {
             id: Date.now(),
             type: 'RCI',
             date: new Date().toISOString(),
             netValue: calculation.liquido,
-            socioId: selectedSocioId,
+            socioId: formData.selectedSocioId,
             socioName: selectedSocio.nome,
-            proLaboreValue: proLaboreValue,
-            mesCompetencia: mesCompetencia,
-            manualProventos: manualProventos,
-            manualDescontos: manualDescontos,
+            proLaboreValue: formData.proLaboreValue,
+            mesCompetencia: formData.mesCompetencia,
+            manualProventos: formData.manualProventos,
+            manualDescontos: formData.manualDescontos,
             calculation: calculation,
         };
 
@@ -233,7 +235,6 @@ export default function RciCalculator() {
         const pageMargin = 15;
         let finalY = 20;
 
-        // Header
         if (activeCompany.data?.logo) {
             try { doc.addImage(activeCompany.data.logo, 'PNG', pageMargin, finalY, 25, 25); } 
             catch (e) { console.error("Error adding logo to PDF:", e); }
@@ -244,11 +245,10 @@ export default function RciCalculator() {
         doc.text('Recibo de Pagamento de Pró-labore', doc.internal.pageSize.width - pageMargin, finalY + 8, { align: 'right' });
         doc.setFontSize(11);
         doc.setFont('helvetica', 'normal');
-        doc.text(`Competência: ${mesCompetencia}`, doc.internal.pageSize.width - pageMargin, finalY + 16, { align: 'right' });
+        doc.text(`Competência: ${form.getValues('mesCompetencia')}`, doc.internal.pageSize.width - pageMargin, finalY + 16, { align: 'right' });
 
         finalY += 45;
 
-        // Company and Partner Info
         autoTable(doc, {
             startY: finalY,
             theme: 'plain',
@@ -262,7 +262,6 @@ export default function RciCalculator() {
         });
         finalY = (doc as any).lastAutoTable.finalY + 10;
         
-        // Main Content Table
         const mainTableBody = [
             ...calculation.proventos.map((p, i) => [`10${i + 1}`, p.descricao, formatCurrencyNoSymbol(p.value || 0), '']),
             ...calculation.descontos.map((d, i) => [`20${i + 1}`, d.descricao, '', formatCurrencyNoSymbol(d.value || 0)]),
@@ -283,7 +282,6 @@ export default function RciCalculator() {
         });
         finalY = (doc as any).lastAutoTable.finalY;
         
-        // Summary Table
         autoTable(doc, {
             startY: finalY,
             theme: 'grid',
@@ -302,7 +300,6 @@ export default function RciCalculator() {
         });
         finalY = (doc as any).lastAutoTable.finalY + 15;
 
-        // Bases
         autoTable(doc, {
             startY: finalY,
             theme: 'plain',
@@ -316,213 +313,221 @@ export default function RciCalculator() {
         });
         finalY = (doc as any).lastAutoTable.finalY + 15;
         
-        // Legal text
         doc.setFontSize(8);
         doc.setTextColor(100);
         doc.text(
-            `Declaro ter recebido de ${activeCompany.data?.razaoSocial || activeCompany.name} a importância líquida de ${formatCurrency(calculation.liquido)} referente ao pagamento de pró-labore da competência de ${mesCompetencia}, dando plena e total quitação do mesmo.`,
+            `Declaro ter recebido de ${activeCompany.data?.razaoSocial || activeCompany.name} a importância líquida de ${formatCurrency(calculation.liquido)} referente ao pagamento de pró-labore da competência de ${form.getValues('mesCompetencia')}, dando plena e total quitação do mesmo.`,
             pageMargin, finalY,
             { maxWidth: doc.internal.pageSize.width - pageMargin * 2, align: 'justify' }
         );
         finalY += 25;
 
-        // Signature line
         const signatureX = doc.internal.pageSize.width / 2;
         doc.line(signatureX - 40, finalY, signatureX + 40, finalY);
         doc.text(selectedSocio.nome, signatureX, finalY + 5, { align: 'center' });
         doc.text('Assinatura do Beneficiário', signatureX, finalY + 10, { align: 'center' });
 
-        doc.save(`RCI_${selectedSocio.nome.replace(/\s/g, '_')}_${mesCompetencia.replace('/', '-')}.pdf`);
-    };
-
-    const handleMesCompetenciaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        let value = e.target.value.replace(/\D/g, '');
-        if (value.length > 2) {
-            value = `${value.slice(0, 2)}/${value.slice(2, 6)}`;
-        }
-        setMesCompetencia(value);
+        doc.save(`RCI_${selectedSocio.nome.replace(/\s/g, '_')}_${form.getValues('mesCompetencia').replace('/', '-')}.pdf`);
     };
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="lg:col-span-1 space-y-6">
-                 <div className="flex items-center gap-4">
-                    <Link href="/pessoal">
-                        <Button variant="outline" size="icon" className="h-8 w-8">
-                            <ArrowLeft className="h-4 w-4" />
-                            <span className="sr-only">Voltar</span>
-                        </Button>
-                    </Link>
-                    <div className="space-y-1">
-                        <h1 className="text-3xl font-bold tracking-tight font-headline">RCI (Pró-labore)</h1>
-                        <p className="text-muted-foreground">
-                        Calcule o Recibo de Pagamento de Contribuinte Individual para pró-labore dos sócios.
-                        </p>
+        <Form {...form}>
+            <form onSubmit={form.handleSubmit(onFormSubmit)} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="lg:col-span-1 space-y-6">
+                    <div className="flex items-center gap-4">
+                        <Link href="/pessoal">
+                            <Button variant="outline" size="icon" className="h-8 w-8">
+                                <ArrowLeft className="h-4 w-4" />
+                                <span className="sr-only">Voltar</span>
+                            </Button>
+                        </Link>
+                        <div className="space-y-1">
+                            <h1 className="text-3xl font-bold tracking-tight font-headline">RCI (Pró-labore)</h1>
+                            <p className="text-muted-foreground">
+                            Calcule o Recibo de Pagamento de Contribuinte Individual para pró-labore dos sócios.
+                            </p>
+                        </div>
                     </div>
-                </div>
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Dados do Cálculo</CardTitle>
-                        <CardDescription>Preencha os dados do sócio e o valor do pró-labore.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                         <Tabs defaultValue="principal">
-                            <TabsList className="grid w-full grid-cols-3 mb-4">
-                                <TabsTrigger value="principal">Principal</TabsTrigger>
-                                <TabsTrigger value="proventos">Proventos</TabsTrigger>
-                                <TabsTrigger value="descontos">Descontos</TabsTrigger>
-                            </TabsList>
-                            <TabsContent value="principal" className="space-y-4">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="socioName">Sócio/Contribuinte</Label>
-                                        <Select value={selectedSocioId} onValueChange={setSelectedSocioId}>
-                                            <SelectTrigger id="socioName">
-                                                <SelectValue placeholder="Selecione um sócio..." />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {socios.length > 0 ? (
-                                                    socios.map(socio => (
-                                                        <SelectItem key={socio.id} value={socio.id.toString()}>{socio.nome}</SelectItem>
-                                                    ))
-                                                ) : (
-                                                    <div className="p-4 text-sm text-muted-foreground">Nenhum sócio cadastrado.</div>
-                                                )}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="month">Competência</Label>
-                                        <Input 
-                                            id="month" 
-                                            type="text" 
-                                            placeholder="MM/AAAA"
-                                            value={mesCompetencia} 
-                                            onChange={handleMesCompetenciaChange}
-                                            maxLength={7}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Dados do Cálculo</CardTitle>
+                            <CardDescription>Preencha os dados do sócio e o valor do pró-labore.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <Tabs defaultValue="principal">
+                                <TabsList className="grid w-full grid-cols-3 mb-4">
+                                    <TabsTrigger value="principal">Principal</TabsTrigger>
+                                    <TabsTrigger value="proventos">Proventos</TabsTrigger>
+                                    <TabsTrigger value="descontos">Descontos</TabsTrigger>
+                                </TabsList>
+                                <TabsContent value="principal" className="space-y-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <FormField
+                                            control={form.control}
+                                            name="selectedSocioId"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Sócio/Contribuinte *</FormLabel>
+                                                    <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+                                                        <FormControl>
+                                                            <SelectTrigger><SelectValue placeholder="Selecione um sócio..." /></SelectTrigger>
+                                                        </FormControl>
+                                                        <SelectContent>
+                                                            {socios.length > 0 ? (
+                                                                socios.map(socio => <SelectItem key={socio.id} value={socio.id.toString()}>{socio.nome}</SelectItem>)
+                                                            ) : (
+                                                                <div className="p-4 text-sm text-muted-foreground">Nenhum sócio cadastrado.</div>
+                                                            )}
+                                                        </SelectContent>
+                                                    </Select>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                        <FormField
+                                            control={form.control}
+                                            name="mesCompetencia"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Competência *</FormLabel>
+                                                    <FormControl>
+                                                        <Input placeholder="MM/AAAA" {...field} />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
                                         />
                                     </div>
+                                    <FormField
+                                        control={form.control}
+                                        name="proLaboreValue"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Valor do Pró-labore (R$) *</FormLabel>
+                                                <FormControl>
+                                                    <MoneyInput id="proLaboreValue" value={field.value} onValueChange={field.onChange} />
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                </TabsContent>
+                                <TabsContent value="proventos" className="space-y-2">
+                                    {form.getValues('manualProventos')?.map((p, index) => (
+                                        <div key={p.id} className="flex gap-2 items-center">
+                                            <Input placeholder="Descrição do provento" value={p.descricao} onChange={(e) => handleUpdateRubrica('provento', p.id, 'descricao', e.target.value)} />
+                                            <MoneyInput id={`provento-${p.id}`} value={p.value || 0} onValueChange={(val) => handleUpdateRubrica('provento', p.id, 'value', val)} />
+                                            <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveRubrica('provento', p.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                                        </div>
+                                    ))}
+                                    <Button type="button" variant="outline" size="sm" className="w-full" onClick={() => handleAddRubrica('provento')}><Plus className="mr-2 h-4 w-4" />Adicionar Provento</Button>
+                                </TabsContent>
+                                <TabsContent value="descontos" className="space-y-2">
+                                    {form.getValues('manualDescontos')?.map(d => (
+                                        <div key={d.id} className="flex gap-2 items-center">
+                                            <Input placeholder="Descrição do desconto" value={d.descricao} onChange={(e) => handleUpdateRubrica('desconto', d.id, 'descricao', e.target.value)} />
+                                            <MoneyInput id={`desconto-${d.id}`} value={d.value || 0} onValueChange={(val) => handleUpdateRubrica('desconto', d.id, 'value', val)} />
+                                            <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveRubrica('desconto', d.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                                        </div>
+                                    ))}
+                                    <Button type="button" variant="outline" size="sm" className="w-full" onClick={() => handleAddRubrica('desconto')}><Plus className="mr-2 h-4 w-4" />Adicionar Desconto</Button>
+                                </TabsContent>
+                            </Tabs>
+                        </CardContent>
+                    </Card>
+                    <Button type="submit" disabled={isLoading} className="w-full" size="lg">
+                        {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Calculator className="mr-2 h-4 w-4" />}
+                        {isLoading ? "Calculando..." : "Calcular / Recalcular"}
+                    </Button>
+                </div>
+                <div className="lg:col-span-1">
+                    <Card className="min-h-full sticky top-24">
+                        <CardHeader>
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <CardTitle>Demonstrativo de Pagamento</CardTitle>
+                                    <CardDescription>Resultado do cálculo do pró-labore.</CardDescription>
                                 </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="proLaboreValue">Valor do Pró-labore (R$)</Label>
-                                    <MoneyInput id="proLaboreValue" value={proLaboreValue} onValueChange={setProLaboreValue} />
-                                </div>
-                            </TabsContent>
-                            <TabsContent value="proventos" className="space-y-2">
-                                 {manualProventos.map(p => (
-                                    <div key={p.id} className="flex gap-2 items-center">
-                                        <Input placeholder="Descrição do provento" value={p.descricao} onChange={(e) => handleUpdateRubrica('provento', p.id, 'descricao', e.target.value)} />
-                                        <MoneyInput id={`provento-${p.id}`} value={p.value || 0} onValueChange={(val) => handleUpdateRubrica('provento', p.id, 'value', val)} />
-                                        <Button variant="ghost" size="icon" onClick={() => handleRemoveRubrica('provento', p.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                                    </div>
-                                ))}
-                                <Button variant="outline" size="sm" className="w-full" onClick={() => handleAddRubrica('provento')}><Plus className="mr-2 h-4 w-4" />Adicionar Provento</Button>
-                            </TabsContent>
-                            <TabsContent value="descontos" className="space-y-2">
-                                {manualDescontos.map(d => (
-                                    <div key={d.id} className="flex gap-2 items-center">
-                                        <Input placeholder="Descrição do desconto" value={d.descricao} onChange={(e) => handleUpdateRubrica('desconto', d.id, 'descricao', e.target.value)} />
-                                        <MoneyInput id={`desconto-${d.id}`} value={d.value || 0} onValueChange={(val) => handleUpdateRubrica('desconto', d.id, 'value', val)} />
-                                        <Button variant="ghost" size="icon" onClick={() => handleRemoveRubrica('desconto', d.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                                    </div>
-                                ))}
-                                <Button variant="outline" size="sm" className="w-full" onClick={() => handleAddRubrica('desconto')}><Plus className="mr-2 h-4 w-4" />Adicionar Desconto</Button>
-                            </TabsContent>
-                         </Tabs>
-                    </CardContent>
-                </Card>
-                 <Button onClick={() => handleCalculate()} disabled={proLaboreValue <= 0 || isLoading} className="w-full" size="lg">
-                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Calculator className="mr-2 h-4 w-4" />}
-                    {isLoading ? "Calculando..." : "Calcular / Recalcular"}
-                </Button>
-            </div>
-            <div className="lg:col-span-1">
-                 <Card className="min-h-full sticky top-24">
-                    <CardHeader>
-                        <div className="flex justify-between items-start">
-                            <div>
-                                <CardTitle>Demonstrativo de Pagamento</CardTitle>
-                                <CardDescription>Resultado do cálculo do pró-labore.</CardDescription>
                             </div>
-                        </div>
-                    </CardHeader>
-                    <CardContent>
-                        {calculation ? (
-                            <div>
-                                <div className='flex justify-between items-center mb-4 p-4 bg-muted/50 rounded-lg'>
-                                    <div>
-                                        <p className='font-bold text-lg'>{selectedSocio?.nome || 'Contribuinte'}</p>
-                                        <p className='text-sm text-muted-foreground'>Recibo de Pagamento de Contribuinte Individual</p>
+                        </CardHeader>
+                        <CardContent>
+                            {calculation ? (
+                                <div>
+                                    <div className='flex justify-between items-center mb-4 p-4 bg-muted/50 rounded-lg'>
+                                        <div>
+                                            <p className='font-bold text-lg'>{selectedSocio?.nome || 'Contribuinte'}</p>
+                                            <p className='text-sm text-muted-foreground'>Recibo de Pagamento de Contribuinte Individual</p>
+                                        </div>
+                                        <div className='text-right'>
+                                                <Badge variant="outline">Pró-labore</Badge>
+                                        </div>
                                     </div>
-                                    <div className='text-right'>
-                                            <Badge variant="outline">Pró-labore</Badge>
-                                    </div>
-                                </div>
-                                
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Descrição</TableHead>
-                                            <TableHead className="text-right">Proventos</TableHead>
-                                            <TableHead className="text-right">Descontos</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {calculation.proventos.map(item => (
-                                            <TableRow key={`p-${item.id}`}>
-                                                <TableCell className="font-medium">{item.descricao}</TableCell>
-                                                <TableCell className="text-right font-mono text-emerald-600">{formatCurrencyNoSymbol(item.value || 0)}</TableCell>
-                                                <TableCell></TableCell>
+                                    
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Descrição</TableHead>
+                                                <TableHead className="text-right">Proventos</TableHead>
+                                                <TableHead className="text-right">Descontos</TableHead>
                                             </TableRow>
-                                        ))}
-                                        {calculation.descontos.map(item => (
-                                            <TableRow key={`d-${item.id}`}>
-                                                <TableCell className="font-medium">{item.descricao}</TableCell>
-                                                <TableCell></TableCell>
-                                                <TableCell className="text-right font-mono text-red-600">{formatCurrencyNoSymbol(item.value || 0)}</TableCell>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {calculation.proventos.map(item => (
+                                                <TableRow key={`p-${item.id}`}>
+                                                    <TableCell className="font-medium">{item.descricao}</TableCell>
+                                                    <TableCell className="text-right font-mono text-emerald-600">{formatCurrencyNoSymbol(item.value || 0)}</TableCell>
+                                                    <TableCell></TableCell>
+                                                </TableRow>
+                                            ))}
+                                            {calculation.descontos.map(item => (
+                                                <TableRow key={`d-${item.id}`}>
+                                                    <TableCell className="font-medium">{item.descricao}</TableCell>
+                                                    <TableCell></TableCell>
+                                                    <TableCell className="text-right font-mono text-red-600">{formatCurrencyNoSymbol(item.value || 0)}</TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                        <TableFooter>
+                                                <TableRow className="font-bold">
+                                                <TableCell>Totais</TableCell>
+                                                <TableCell className="text-right font-mono text-emerald-600">{formatCurrencyNoSymbol(calculation.totalProventos)}</TableCell>
+                                                <TableCell className="text-right font-mono text-red-600">{formatCurrencyNoSymbol(calculation.totalDescontos)}</TableCell>
                                             </TableRow>
-                                        ))}
-                                    </TableBody>
-                                    <TableFooter>
-                                            <TableRow className="font-bold">
-                                            <TableCell>Totais</TableCell>
-                                            <TableCell className="text-right font-mono text-emerald-600">{formatCurrencyNoSymbol(calculation.totalProventos)}</TableCell>
-                                            <TableCell className="text-right font-mono text-red-600">{formatCurrencyNoSymbol(calculation.totalDescontos)}</TableCell>
-                                        </TableRow>
-                                    </TableFooter>
-                                </Table>
+                                        </TableFooter>
+                                    </Table>
 
-                                    <div className='mt-6 flex justify-between items-center font-bold text-lg p-4 bg-muted rounded-lg'>
-                                    <span>Valor Líquido a Receber</span>
-                                    <span className="font-mono text-xl">{formatCurrency(calculation.liquido)}</span>
-                                    </div>
+                                        <div className='mt-6 flex justify-between items-center font-bold text-lg p-4 bg-muted rounded-lg'>
+                                        <span>Valor Líquido a Receber</span>
+                                        <span className="font-mono text-xl">{formatCurrency(calculation.liquido)}</span>
+                                        </div>
 
-                                    <div className="mt-4 grid grid-cols-2 gap-4 text-xs text-muted-foreground">
-                                    <p>Base de Cálculo INSS: <span className='font-mono'>{formatCurrency(calculation.baseInss)}</span></p>
-                                    <p>Base de Cálculo IRRF: <span className='font-mono'>{formatCurrency(calculation.baseIrrf)}</span></p>
-                                    </div>
+                                        <div className="mt-4 grid grid-cols-2 gap-4 text-xs text-muted-foreground">
+                                        <p>Base de Cálculo INSS: <span className='font-mono'>{formatCurrency(calculation.baseInss)}</span></p>
+                                        <p>Base de Cálculo IRRF: <span className='font-mono'>{formatCurrency(calculation.baseIrrf)}</span></p>
+                                        </div>
 
-                            </div>
-                        ) : (
-                                <div className="flex flex-col items-center justify-center text-center p-8 text-muted-foreground min-h-[400px]">
-                                <Calculator className="h-12 w-12 mb-4" />
-                                <p className="font-medium">Preencha os dados e clique em "Calcular"</p>
-                                <p className="text-sm">O resultado do cálculo aparecerá aqui.</p>
-                            </div>
+                                </div>
+                            ) : (
+                                    <div className="flex flex-col items-center justify-center text-center p-8 text-muted-foreground min-h-[400px]">
+                                    <Calculator className="h-12 w-12 mb-4" />
+                                    <p className="font-medium">Preencha os dados e clique em "Calcular"</p>
+                                    <p className="text-sm">O resultado do cálculo aparecerá aqui.</p>
+                                </div>
+                            )}
+                        </CardContent>
+                        {calculation && (
+                            <CardFooter className="justify-end gap-2 border-t pt-6 mt-4">
+                                    <Button variant="outline" onClick={handleSaveCalculation} disabled={!calculation}>
+                                    <Save className="mr-2 h-4 w-4" /> Salvar Cálculo
+                                    </Button>
+                                    <Button onClick={handleSavePdf} disabled={!calculation}>
+                                    <FileDown className="mr-2 h-4 w-4" /> Gerar PDF
+                                    </Button>
+                            </CardFooter>
                         )}
-                    </CardContent>
-                    {calculation && (
-                        <CardFooter className="justify-end gap-2 border-t pt-6 mt-4">
-                                <Button variant="outline" onClick={handleSaveCalculation} disabled={!calculation}>
-                                <Save className="mr-2 h-4 w-4" /> Salvar Cálculo
-                                </Button>
-                                <Button onClick={handleSavePdf} disabled={!calculation}>
-                                <FileDown className="mr-2 h-4 w-4" /> Gerar PDF
-                                </Button>
-                        </CardFooter>
-                    )}
-                </Card>
-            </div>
-        </div>
+                    </Card>
+                </div>
+            </form>
+        </Form>
     );
 }
