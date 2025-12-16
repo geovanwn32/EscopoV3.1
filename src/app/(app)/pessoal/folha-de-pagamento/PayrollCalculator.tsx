@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCompany } from '@/hooks/use-company';
 import { Funcionario, Rubrica, CalculationResult, SavedCalculation } from '@/types/pessoal';
-import { Loader2, Calculator, Save, FileDown, Plus, Trash2, Check, ChevronsUpDown, Calendar as CalendarIcon } from 'lucide-react';
+import { Loader2, Calculator, Save, FileDown, Plus, Trash2, Check, ChevronsUpDown, Calendar as CalendarIcon, Info } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHeader, TableRow, TableHead, TableFooter } from '@/components/ui/table';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
@@ -20,7 +20,8 @@ import { useToast } from '@/hooks/use-toast';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { MoneyInput } from '@/components/ui/money-input';
-
+import { Skeleton } from '@/components/ui/skeleton';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const inssBrackets = [
     { limit: 1412.00, rate: 0.075, deduction: 0 },
@@ -45,6 +46,7 @@ export default function PayrollCalculator() {
     const { toast } = useToast();
     const { useScopedData, companies, currentCompany } = useCompany();
     const [funcionarios] = useScopedData<Funcionario[]>('cadastros-funcionarios', []);
+    const [rubricas] = useScopedData<Rubrica[]>('cadastros-rubricas', []);
     const [savedCalculations, setSavedCalculations] = useScopedData<SavedCalculation[]>('pessoal-calculos-salvos', []);
 
     const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
@@ -54,7 +56,7 @@ export default function PayrollCalculator() {
     const [faltas, setFaltas] = useState(0);
     const [horasExtras50, setHorasExtras50] = useState(0);
     const [horasExtras100, setHorasExtras100] = useState(0);
-    const [domingosFeriados, setDomingosFeriados] = useState(4); // Default to 4 Sundays
+    const [domingosFeriados, setDomingosFeriados] = useState(4);
 
     const [manualProventos, setManualProventos] = useState<Rubrica[]>([]);
     const [manualDescontos, setManualDescontos] = useState<Rubrica[]>([]);
@@ -73,12 +75,21 @@ export default function PayrollCalculator() {
             setManualDescontos(prev => [...prev, newRubrica]);
         }
     };
-    const handleUpdateRubrica = (type: 'provento' | 'desconto', id: number, field: 'descricao' | 'value', fieldValue: string | number) => {
-        const updater = (prev: Rubrica[]) => prev.map(r => r.id === id ? { ...r, [field]: fieldValue } : r);
+    const handleUpdateRubricaValue = (id: number, type: 'provento' | 'desconto', value: number) => {
+        const updater = (prev: Rubrica[]) => prev.map(r => r.id === id ? { ...r, value } : r);
         if (type === 'provento') setManualProventos(updater);
         else setManualDescontos(updater);
     };
-    const handleRemoveRubrica = (type: 'provento' | 'desconto', id: number) => {
+
+    const handleSelectRubrica = (id: number, type: 'provento' | 'desconto', rubricaId: string) => {
+        const selectedRubrica = rubricas.find(r => r.id.toString() === rubricaId);
+        if (!selectedRubrica) return;
+        const updater = (prev: Rubrica[]) => prev.map(r => r.id === id ? { ...r, ...selectedRubrica, id: r.id } : r);
+        if (type === 'provento') setManualProventos(updater);
+        else setManualDescontos(updater);
+    }
+    
+    const handleRemoveRubrica = (id: number, type: 'provento' | 'desconto') => {
         const remover = (prev: Rubrica[]) => prev.filter(r => r.id !== id);
         if (type === 'provento') setManualProventos(remover);
         else setManualDescontos(remover);
@@ -163,8 +174,8 @@ export default function PayrollCalculator() {
             const proventos: Rubrica[] = [
                 { id: 1, codigo: '101', descricao: 'Salário Base', tipo: 'Provento', value: salarioBase, incidencias: { inss: true, irrf: true, fgts: true, contribuicaoSindical: false } },
             ];
-            if (valorHE50 > 0) proventos.push({ id: 2, codigo: '102', descricao: 'Horas Extras 50%', tipo: 'Provento', value: valorHE50, incidencias: { inss: true, irrf: true, fgts: true, contribuicaoSindical: false } });
-            if (valorHE100 > 0) proventos.push({ id: 3, codigo: '103', descricao: 'Horas Extras 100%', tipo: 'Provento', value: valorHE100, incidencias: { inss: true, irrf: true, fgts: true, contribuicaoSindical: false } });
+            if (valorHE50 > 0) proventos.push({ id: 2, codigo: '102', descricao: `Horas Extras 50% (${horasExtras50}h)`, tipo: 'Provento', value: valorHE50, incidencias: { inss: true, irrf: true, fgts: true, contribuicaoSindical: false } });
+            if (valorHE100 > 0) proventos.push({ id: 3, codigo: '103', descricao: `Horas Extras 100% (${horasExtras100}h)`, tipo: 'Provento', value: valorHE100, incidencias: { inss: true, irrf: true, fgts: true, contribuicaoSindical: false } });
             if (dsr > 0) proventos.push({ id: 4, codigo: '104', descricao: 'D.S.R. sobre Horas Extras', tipo: 'Provento', value: dsr, incidencias: { inss: true, irrf: true, fgts: true, contribuicaoSindical: false } });
             proventos.push(...manualProventos.filter(p => p.value || 0 > 0));
 
@@ -220,98 +231,108 @@ export default function PayrollCalculator() {
     };
 
     const handleGeneratePdf = () => {
-         if (!calculation || !selectedEmployee || !activeCompany || !competenceDate) {
-            toast({ variant: 'destructive', title: 'Dados insuficientes', description: 'Realize um cálculo e selecione um funcionário para gerar o PDF.' });
-            return;
-        }
-        const doc = new jsPDF();
-        
-        let finalY = 20;
+        if (!calculation || !selectedEmployee || !activeCompany || !competenceDate) {
+           toast({ variant: 'destructive', title: 'Dados insuficientes', description: 'Realize um cálculo e selecione um funcionário para gerar o PDF.' });
+           return;
+       }
+       const doc = new jsPDF();
+       const pageMargin = 15;
+       let finalY = 20;
 
-        if (activeCompany.data?.logo) {
-            try { doc.addImage(activeCompany.data.logo, 'PNG', 14, finalY - 10, 25, 25); } 
-            catch (e) { console.error("Error adding logo to PDF:", e); }
-        }
+       if (activeCompany.data?.logo) {
+           try { doc.addImage(activeCompany.data.logo, 'PNG', pageMargin, finalY - 10, 20, 20); } 
+           catch (e) { console.error("Error adding logo to PDF:", e); }
+       }
+       
+       doc.setFontSize(16);
+       doc.setFont('helvetica', 'bold');
+       doc.text('Recibo de Pagamento de Salário', doc.internal.pageSize.width - pageMargin, finalY, { align: 'right' });
+       doc.setFontSize(11);
+       doc.setFont('helvetica', 'normal');
+       doc.text(`Competência: ${format(competenceDate, 'MM/yyyy', { locale: ptBR })}`, doc.internal.pageSize.width - pageMargin, finalY + 8, { align: 'right' });
 
-        doc.setFontSize(16);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Recibo de Pagamento de Salário', doc.internal.pageSize.width / 2, finalY, { align: 'center' });
-        finalY += 8;
-        
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
-        doc.text(`Competência: ${format(competenceDate, 'MM/yyyy')}`, doc.internal.pageSize.width / 2, finalY, { align: 'center' });
-        finalY += 15;
-        
-        autoTable(doc, {
-            startY: finalY,
-            theme: 'plain',
-            styles: { fontSize: 8, cellPadding: 0.5 },
-            body: [
-                [
-                    { content: `Empresa: ${activeCompany.data?.razaoSocial || activeCompany.name}` },
-                    { content: `CNPJ: ${activeCompany.data?.cnpj || ''}`, styles: { halign: 'right' } }
-                ],
-                [
-                    { content: `Funcionário: ${selectedEmployee.nome}` },
-                    { content: `Cargo: ${selectedEmployee.cargo}`, styles: { halign: 'right' } }
-                ]
-            ],
-        });
-        finalY = (doc as any).lastAutoTable.finalY + 5;
+       finalY += 30;
 
+       autoTable(doc, {
+           startY: finalY,
+           theme: 'plain',
+           styles: { fontSize: 9, cellPadding: 1, overflow: 'linebreak' },
+           body: [
+               [{ content: 'Empresa Pagadora', styles: { fontStyle: 'bold' } }, { content: 'Funcionário', styles: { fontStyle: 'bold' } }],
+               [`${activeCompany.data?.razaoSocial || activeCompany.name}`, `Nome: ${selectedEmployee.nome}`],
+               [`CNPJ: ${activeCompany.data?.cnpj || ''}`, `Cargo: ${selectedEmployee.cargo || 'N/A'}`],
+               [`Endereço: ${activeCompany.data?.logradouro || ''}, ${activeCompany.data?.numero || ''}`, `Data de Admissão: ${format(new Date(selectedEmployee.dataAdmissao), 'dd/MM/yyyy')}`],
+           ],
+       });
+       finalY = (doc as any).lastAutoTable.finalY + 8;
+       
+       const mainTableBody = calculation.proventos.map(p => [
+           p.codigo,
+           p.descricao,
+           '', // referência
+           formatCurrencyNoSymbol(p.value || 0),
+           ''
+       ]);
+       calculation.descontos.forEach(d => mainTableBody.push([
+           d.codigo,
+           d.descricao,
+           '', // referência
+           '',
+           formatCurrencyNoSymbol(d.value || 0)
+       ]));
 
-        const body = calculation.proventos.map(p => [p.codigo, p.descricao, '', formatCurrencyNoSymbol(p.value || 0), '']);
-        calculation.descontos.forEach(d => body.push([d.codigo, d.descricao, '', '', formatCurrencyNoSymbol(d.value || 0)]));
-        
-        autoTable(doc, {
-            startY: finalY,
-            head: [['Cód.', 'Descrição', 'Referência', 'Proventos', 'Descontos']],
-            body: body,
-            theme: 'grid',
-            headStyles: { fillColor: [240, 240, 240], textColor: 40, fontStyle: 'bold', fontSize: 8, cellPadding: 1 },
-            bodyStyles: { fontSize: 8, cellPadding: 1 },
-            columnStyles: {
-                2: { halign: 'right' },
-                3: { halign: 'right', textColor: [22, 163, 74] },
-                4: { halign: 'right', textColor: [220, 38, 38] }
-            }
-        });
-        finalY = (doc as any).lastAutoTable.finalY;
+       autoTable(doc, {
+           startY: finalY,
+           head: [['Cód.', 'Descrição', 'Referência', 'Proventos', 'Descontos']],
+           body: mainTableBody,
+           theme: 'striped',
+           headStyles: { fillColor: [41, 128, 185], textColor: 255, fontStyle: 'bold', fontSize: 9 },
+           bodyStyles: { fontSize: 8 },
+           columnStyles: {
+               0: { cellWidth: 15 },
+               1: { cellWidth: 'auto' },
+               2: { halign: 'right', cellWidth: 20 },
+               3: { halign: 'right', cellWidth: 30, textColor: [22, 163, 74] },
+               4: { halign: 'right', cellWidth: 30, textColor: [220, 38, 38] }
+           }
+       });
+       finalY = (doc as any).lastAutoTable.finalY;
+       
+       autoTable(doc, {
+           startY: finalY,
+           theme: 'grid',
+           body: [
+               [
+                   { content: 'Totais:', colSpan: 3, styles: { halign: 'right', fontStyle: 'bold' } },
+                   { content: formatCurrencyNoSymbol(calculation.totalProventos), styles: { halign: 'right', fontStyle: 'bold', textColor: [22, 163, 74] } },
+                   { content: formatCurrencyNoSymbol(calculation.totalDescontos), styles: { halign: 'right', fontStyle: 'bold', textColor: [220, 38, 38] } },
+               ],
+               [
+                   { content: 'Líquido a Receber:', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold', fillColor: [236, 240, 241], cellPadding: 2 } },
+                   { content: formatCurrency(calculation.liquido), styles: { halign: 'right', fontStyle: 'bold', fontSize: 11, fillColor: [236, 240, 241], cellPadding: 2 } },
+               ]
+           ],
+           bodyStyles: { fontSize: 9 },
+       });
+       finalY = (doc as any).lastAutoTable.finalY + 8;
+       
+       autoTable(doc, {
+           startY: finalY,
+           theme: 'plain',
+           styles: { fontSize: 7, cellPadding: 0.5 },
+           body: [
+               [`Salário Base: ${formatCurrency(selectedEmployee.salario)}`, `Base INSS: ${formatCurrency(calculation.baseInss)}`, `Base FGTS: ${formatCurrency(calculation.baseInss)}`, `Base IRRF: ${formatCurrency(calculation.baseIrrf)}`],
+           ],
+       });
+       finalY = (doc as any).lastAutoTable.finalY + 15;
 
-        autoTable(doc, {
-            startY: finalY,
-            theme: 'grid',
-            body: [
-                [
-                    { content: 'Totais:', colSpan: 3, styles: { halign: 'right', fontStyle: 'bold' } },
-                    { content: formatCurrencyNoSymbol(calculation.totalProventos), styles: { halign: 'right', fontStyle: 'bold', textColor: [22, 163, 74] } },
-                    { content: formatCurrencyNoSymbol(calculation.totalDescontos), styles: { halign: 'right', fontStyle: 'bold', textColor: [220, 38, 38] } },
-                ],
-                [
-                    { content: 'Líquido a Receber:', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold', cellPadding: 1.5 } },
-                    { content: formatCurrency(calculation.liquido), styles: { halign: 'right', fontStyle: 'bold', cellPadding: 1.5, fontSize: 9 } },
-                ]
-            ],
-            bodyStyles: { fontSize: 8, cellPadding: 1 },
-        });
-        finalY = (doc as any).lastAutoTable.finalY + 10;
-        
-        autoTable(doc, {
-            startY: finalY,
-            theme: 'plain',
-            body: [[
-                `Salário Base: ${formatCurrency(selectedEmployee.salario)}`,
-                `Base INSS: ${formatCurrency(calculation.baseInss)}`,
-                `Base FGTS: ${formatCurrency(calculation.baseInss)}`,
-                `Base IRRF: ${formatCurrency(calculation.baseIrrf)}`,
-            ]],
-            bodyStyles: { fontSize: 7, textColor: 100, cellPadding: 0.5 },
-        });
+       doc.setFontSize(8);
+       doc.text('__________________________________________________', doc.internal.pageSize.width / 2, finalY, { align: 'center' });
+       doc.text(selectedEmployee.nome, doc.internal.pageSize.width / 2, finalY + 5, { align: 'center' });
 
-        doc.save(`Holerite_${selectedEmployee.nome.replace(/\s/g, '_')}_${format(competenceDate, 'MM_yyyy')}.pdf`);
-        toast({ title: 'PDF Gerado!', description: 'O holerite foi salvo com sucesso.' });
-    }
+       doc.save(`Holerite_${selectedEmployee.nome.replace(/\s/g, '_')}_${format(competenceDate, 'MM_yyyy')}.pdf`);
+       toast({ title: 'PDF Gerado!', description: 'O holerite foi salvo com sucesso.' });
+   }
     
     const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     const formatCurrencyNoSymbol = (value: number) => value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -338,7 +359,7 @@ export default function PayrollCalculator() {
                                     <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
                                         <Command><CommandInput placeholder="Pesquisar..." /><CommandList><CommandEmpty>Nenhum funcionário.</CommandEmpty><CommandGroup>
                                             {funcionarios.map((f) => (
-                                                <CommandItem key={f.id} value={f.nome} onSelect={() => { setSelectedEmployeeId(f.id.toString()); setOpenEmployeeSelector(false); }}>
+                                                <CommandItem key={f.id} value={f.nome} onSelect={() => { setSelectedEmployeeId(f.id.toString()); setOpenEmployeeSelector(false); clearForm(); }}>
                                                     <Check className={cn("mr-2 h-4 w-4", selectedEmployeeId === f.id.toString() ? "opacity-100" : "opacity-0")} />
                                                     {f.nome}
                                                 </CommandItem>
@@ -363,19 +384,19 @@ export default function PayrollCalculator() {
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <div className="space-y-2">
                                 <Label htmlFor="faltas">Faltas (dias)</Label>
-                                <Input id="faltas" type="number" value={faltas} onChange={e => setFaltas(Number(e.target.value))} min={0} />
+                                <Input id="faltas" type="number" value={faltas} onChange={e => setFaltas(Math.max(0, Number(e.target.value)))} min={0} />
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="he50">HE 50%</Label>
-                                <Input id="he50" type="number" value={horasExtras50} onChange={e => setHorasExtras50(Number(e.target.value))} min={0} />
+                                <Input id="he50" type="number" value={horasExtras50} onChange={e => setHorasExtras50(Math.max(0, Number(e.target.value)))} min={0} />
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="he100">HE 100%</Label>
-                                <Input id="he100" type="number" value={horasExtras100} onChange={e => setHorasExtras100(Number(e.target.value))} min={0} />
+                                <Input id="he100" type="number" value={horasExtras100} onChange={e => setHorasExtras100(Math.max(0, Number(e.target.value)))} min={0} />
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="dsr">DSRs (dias)</Label>
-                                <Input id="dsr" type="number" value={domingosFeriados} onChange={e => setDomingosFeriados(Number(e.target.value))} min={0} />
+                                <Input id="dsr" type="number" value={domingosFeriados} onChange={e => setDomingosFeriados(Math.max(0, Number(e.target.value)))} min={0} />
                             </div>
                         </div>
                     </CardContent>
@@ -389,9 +410,14 @@ export default function PayrollCalculator() {
                             <div className="space-y-2 mt-2">
                                 {manualProventos.map(p => (
                                     <div key={p.id} className="flex gap-2 items-center">
-                                        <Input placeholder="Descrição do provento" value={p.descricao} onChange={(e) => handleUpdateRubrica('provento', p.id, 'descricao', e.target.value)} />
-                                        <MoneyInput id={`provento-${p.id}`} value={p.value || 0} onValueChange={(val) => handleUpdateRubrica('provento', p.id, 'value', val)} />
-                                        <Button variant="ghost" size="icon" onClick={() => handleRemoveRubrica('provento', p.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                                        <Select onValueChange={(rubricaId) => handleSelectRubrica(p.id, 'provento', rubricaId)}>
+                                            <SelectTrigger><SelectValue placeholder="Selecione a rubrica..." /></SelectTrigger>
+                                            <SelectContent>
+                                                {rubricas.filter(r => r.tipo === 'Provento').map(rub => <SelectItem key={rub.id} value={rub.id.toString()}>{rub.descricao}</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
+                                        <MoneyInput id={`provento-${p.id}`} value={p.value || 0} onValueChange={(val) => handleUpdateRubricaValue(p.id, 'provento', val)} />
+                                        <Button variant="ghost" size="icon" onClick={() => handleRemoveRubrica(p.id, 'provento')}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                                     </div>
                                 ))}
                                 <Button variant="outline" size="sm" className="w-full" onClick={() => handleAddRubrica('provento')}><Plus className="mr-2 h-4 w-4" />Adicionar Provento</Button>
@@ -402,9 +428,14 @@ export default function PayrollCalculator() {
                              <div className="space-y-2 mt-2">
                                 {manualDescontos.map(d => (
                                     <div key={d.id} className="flex gap-2 items-center">
-                                        <Input placeholder="Descrição do desconto" value={d.descricao} onChange={(e) => handleUpdateRubrica('desconto', d.id, 'descricao', e.target.value)} />
-                                        <MoneyInput id={`desconto-${d.id}`} value={d.value || 0} onValueChange={(val) => handleUpdateRubrica('desconto', d.id, 'value', val)} />
-                                        <Button variant="ghost" size="icon" onClick={() => handleRemoveRubrica('desconto', d.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                                        <Select onValueChange={(rubricaId) => handleSelectRubrica(d.id, 'desconto', rubricaId)}>
+                                            <SelectTrigger><SelectValue placeholder="Selecione a rubrica..." /></SelectTrigger>
+                                            <SelectContent>
+                                                {rubricas.filter(r => r.tipo === 'Desconto').map(rub => <SelectItem key={rub.id} value={rub.id.toString()}>{rub.descricao}</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
+                                        <MoneyInput id={`desconto-${d.id}`} value={d.value || 0} onValueChange={(val) => handleUpdateRubricaValue(d.id, 'desconto', val)} />
+                                        <Button variant="ghost" size="icon" onClick={() => handleRemoveRubrica(d.id, 'desconto')}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                                     </div>
                                 ))}
                                 <Button variant="outline" size="sm" className="w-full" onClick={() => handleAddRubrica('desconto')}><Plus className="mr-2 h-4 w-4" />Adicionar Desconto</Button>
@@ -424,7 +455,26 @@ export default function PayrollCalculator() {
                         <CardDescription>Resultado do cálculo da folha de pagamento.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        {calculation ? (
+                        {isLoading ? (
+                             <div className="space-y-4">
+                                <div className='flex justify-between items-center mb-4 p-4 bg-muted/50 rounded-lg'>
+                                    <div>
+                                        <Skeleton className="h-6 w-40 mb-2" />
+                                        <Skeleton className="h-4 w-48" />
+                                    </div>
+                                    <Skeleton className="h-6 w-20" />
+                                </div>
+                                <div className="space-y-3">
+                                    <div className="flex justify-between"><Skeleton className="h-5 w-1/3" /><Skeleton className="h-5 w-1/4" /></div>
+                                    <div className="flex justify-between"><Skeleton className="h-5 w-1/2" /><Skeleton className="h-5 w-1/4" /></div>
+                                    <div className="flex justify-between"><Skeleton className="h-5 w-2/5" /><Skeleton className="h-5 w-1/4" /></div>
+                                    <div className="flex justify-between"><Skeleton className="h-5 w-1/3" /><Skeleton className="h-5 w-1/4" /></div>
+                                </div>
+                                <div className='mt-6 flex justify-between items-center p-4 bg-muted rounded-lg'>
+                                    <Skeleton className="h-6 w-24" /><Skeleton className="h-7 w-32" />
+                                </div>
+                            </div>
+                        ) : calculation ? (
                             <div>
                                 <div className='flex justify-between items-center mb-4 p-4 bg-muted/50 rounded-lg'>
                                     <div>
@@ -471,3 +521,4 @@ export default function PayrollCalculator() {
         </div>
     );
 }
+

@@ -16,7 +16,7 @@ export default function FolhaDePagamentoPage() {
             <div className="space-y-1">
               <h1 className="text-3xl font-bold tracking-tight font-headline">Folha de Pagamento</h1>
               <p className="text-muted-foreground">
-                Calcule a folha de pagamento mensal, férias e rescisões de seus funcionários.
+                Calcule a folha de pagamento mensal de seus funcionários.
               </p>
             </div>
         </div>
