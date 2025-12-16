@@ -1,9 +1,4 @@
 
-
-
-
-
-
 export interface Dependente {
     id: number;
     nome: string;
@@ -116,8 +111,3 @@ export interface SavedCalculation {
     horasExtras100?: number;
     calculation: CalculationResult;
 }
-
-
-
-
-

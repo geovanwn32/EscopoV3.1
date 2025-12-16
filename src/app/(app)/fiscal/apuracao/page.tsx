@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -7,12 +8,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2, Calculator, Save, FileDown, TrendingUp, FileText, Percent, Info } from 'lucide-react';
-import { Table, TableBody, TableCell, TableHeader, TableRow, TableHead, TableFooter } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
 import { NotaFiscal, ProductItem, ServiceItem } from '@/types/fiscal';
+import { ApuracaoImpostos } from '@/types/apuracao';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { format, parse } from 'date-fns';
+import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -27,6 +28,7 @@ export default function ApuracaoPage() {
   const { useScopedData, companies, currentCompany } = useCompany();
   const [notasSaida] = useScopedData<NotaFiscal[]>('fiscal-notasSaida', []);
   const [notasServico] = useScopedData<NotaFiscal[]>('fiscal-notasServico', []);
+  const [apuracoesSalvas, setApuracoesSalvas] = useScopedData<ApuracaoImpostos[]>('fiscal-apuracoes-salvas', []);
 
   const [mesCompetencia, setMesCompetencia] = useState<string>(`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`);
   const [isLoading, setIsLoading] = useState(false);
@@ -64,22 +66,20 @@ export default function ApuracaoPage() {
         const receitaBrutaTotal = salesInPeriod.reduce((acc, nota) => {
             const items = nota.items as (ProductItem[] | ServiceItem[]);
             const totalItems = items.reduce((itemAcc, item) => {
-                if ('total' in item) return itemAcc + item.total; // ProductItem
-                if ('value' in item) return itemAcc + item.value; // ServiceItem
+                if ('total' in item) return itemAcc + item.total;
+                if ('value' in item) return itemAcc + item.value;
                 return itemAcc;
             }, 0);
             return acc + totalItems;
         }, 0);
         
-        // Simples Nacional Calculation (simplified example for Anexo III - Serviços)
-        // This is a major simplification. A real scenario is much more complex.
         let aliquotaEfetiva = 0;
         if (receitaBrutaTotal <= 180000) {
-            aliquotaEfetiva = 0.06; // 6%
+            aliquotaEfetiva = 0.06;
         } else if (receitaBrutaTotal <= 360000) {
-            aliquotaEfetiva = 0.112; // 11.2%
+            aliquotaEfetiva = 0.112;
         } else {
-            aliquotaEfetiva = 0.135; // 13.5%
+            aliquotaEfetiva = 0.135;
         }
         
         const impostoDevido = receitaBrutaTotal * aliquotaEfetiva;
@@ -87,7 +87,7 @@ export default function ApuracaoPage() {
         setCalculation({
           receitaBrutaTotal,
           impostoDevido,
-          baseCalculo: receitaBrutaTotal, // Simplified for this example
+          baseCalculo: receitaBrutaTotal,
           aliquotaEfetiva: aliquotaEfetiva * 100,
         });
 
@@ -99,6 +99,93 @@ export default function ApuracaoPage() {
     }, 500);
   };
   
+    const handleSaveCalculation = () => {
+        if (!calculation) {
+            toast({ variant: 'destructive', title: 'Nenhum cálculo a salvar' });
+            return;
+        }
+        const newApuracao: ApuracaoImpostos = {
+            id: Date.now().toString(),
+            mesCompetencia: format(new Date(mesCompetencia + '-02'), 'MM/yyyy'),
+            dataGeracao: new Date().toISOString(),
+            receitaBrutaTotal: calculation.receitaBrutaTotal,
+            impostoDevido: calculation.impostoDevido,
+            calculos: {
+                baseCalculo: calculation.baseCalculo,
+                aliquotaEfetiva: calculation.aliquotaEfetiva
+            }
+        };
+        setApuracoesSalvas(prev => [newApuracao, ...prev]);
+        toast({ title: 'Apuração Salva!', description: 'O resultado foi salvo no histórico de apurações.' });
+    };
+
+    const handleGeneratePdf = () => {
+        if (!calculation || !activeCompany) {
+            toast({ variant: 'destructive', title: 'Dados insuficientes' });
+            return;
+        }
+
+        const doc = new jsPDF();
+        const pageMargin = 15;
+        const pageWidth = doc.internal.pageSize.getWidth();
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(14);
+        doc.text('DAS - Documento de Arrecadação do Simples Nacional', pageWidth / 2, 20, { align: 'center' });
+        doc.setFontSize(10);
+        doc.text('(SIMULAÇÃO)', pageWidth / 2, 25, { align: 'center' });
+
+        autoTable(doc, {
+            startY: 35,
+            theme: 'grid',
+            head: [['Contribuinte']],
+            body: [
+                [`Período de Apuração (PA): ${format(new Date(mesCompetencia + '-02'), 'MM/yyyy')}`],
+                [`CNPJ: ${activeCompany.data?.cnpj || 'Não informado'}`],
+                [`Nome Empresarial: ${activeCompany.name}`],
+            ],
+            headStyles: { fillColor: [220, 220, 220], textColor: 0, fontStyle: 'bold' }
+        });
+
+        let finalY = (doc as any).lastAutoTable.finalY + 10;
+        
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Valor a Pagar', pageMargin, finalY);
+        finalY += 5;
+        
+        autoTable(doc, {
+            startY: finalY,
+            theme: 'grid',
+            head: [['Descrição do Débito', 'Valor Principal']],
+            body: [
+                ['Principal SN - Cód 1228', formatCurrency(calculation.impostoDevido)]
+            ],
+            headStyles: { fillColor: [220, 220, 220], textColor: 0, fontStyle: 'bold' },
+            columnStyles: { 1: { halign: 'right' } }
+        });
+
+        finalY = (doc as any).lastAutoTable.finalY;
+
+        doc.autoTable({
+            startY: finalY,
+            theme: 'grid',
+            body: [
+                 [{ content: 'Total Consolidado do Período:', styles: { fontStyle: 'bold' } }, { content: formatCurrency(calculation.impostoDevido), styles: { halign: 'right', fontStyle: 'bold' } }]
+            ]
+        });
+
+        finalY = (doc as any).lastAutoTable.finalY + 15;
+        
+        doc.setFontSize(10);
+        doc.text('Data de Vencimento:', pageMargin, finalY);
+        doc.setFont('helvetica', 'normal');
+        doc.text('20/' + format(new Date(mesCompetencia + '-02').setMonth(new Date(mesCompetencia + '-02').getMonth() + 1), 'MM/yyyy'), pageMargin + 40, finalY);
+
+        doc.save(`DAS_Simulacao_${mesCompetencia.replace('-', '_')}.pdf`);
+        toast({ title: 'PDF Gerado!', description: 'A simulação da guia DAS foi baixada.' });
+    };
+
   const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 
@@ -192,8 +279,8 @@ export default function ApuracaoPage() {
             </CardContent>
              {calculation && (
                 <CardFooter className="justify-end gap-2 border-t pt-6 mt-4">
-                    <Button variant="outline"><Save className="mr-2 h-4 w-4" /> Salvar Apuração</Button>
-                    <Button><FileDown className="mr-2 h-4 w-4" /> Gerar Guia DAS (Simulação)</Button>
+                    <Button variant="outline" onClick={handleSaveCalculation}><Save className="mr-2 h-4 w-4" /> Salvar Apuração</Button>
+                    <Button onClick={handleGeneratePdf}><FileDown className="mr-2 h-4 w-4" /> Gerar Guia DAS (Simulação)</Button>
                 </CardFooter>
             )}
           </Card>
