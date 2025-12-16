@@ -300,19 +300,19 @@ export default function RciCalculator() {
                 theme: 'grid',
                 body: [
                     [
-                        { content: 'Totais:', styles: { halign: 'right', fontStyle: 'bold' } },
+                        { content: 'Totais:', styles: { halign: 'right', fontStyle: 'bold', cellWidth: 104.8 } },
                         { content: formatCurrencyNoSymbol(calculation.totalProventos), styles: { halign: 'right', fontStyle: 'bold', textColor: [22, 163, 74] } },
                         { content: formatCurrencyNoSymbol(calculation.totalDescontos), styles: { halign: 'right', fontStyle: 'bold', textColor: [220, 38, 38] } },
                     ]
                 ],
-                columnStyles: { 0: { cellWidth: 104.8 }, 1: { cellWidth: 38.6 }, 2: { cellWidth: 38.6 } },
+                columnStyles: { 1: { cellWidth: 38.6 }, 2: { cellWidth: 38.6 } },
                 bodyStyles: { fontSize: 9 },
             });
             
              autoTable(doc, {
                 startY: (doc as any).lastAutoTable.finalY,
                 theme: 'grid',
-                body: [
+                 body: [
                      [{ content: 'Valor Líquido:', styles: { halign: 'right', fontStyle: 'bold' } },
                      { content: formatCurrency(calculation.liquido), styles: { halign: 'right', fontStyle: 'bold' } },]
                 ],
@@ -346,10 +346,12 @@ export default function RciCalculator() {
             const secondSignatureX = margin + signatureWidth + 10;
 
             doc.line(firstSignatureX, finalY, firstSignatureX + signatureWidth, finalY);
-            doc.text('Pagador (Empresa)', firstSignatureX + signatureWidth / 2, finalY + 4, { align: 'center' });
+            doc.text(activeCompany.data?.razaoSocial || activeCompany.name, firstSignatureX + signatureWidth / 2, finalY + 4, { align: 'center' });
+            doc.text('Pagador (Empresa)', firstSignatureX + signatureWidth / 2, finalY + 8, { align: 'center', fontSize: 7, textColor: 'gray' });
 
             doc.line(secondSignatureX, finalY, secondSignatureX + signatureWidth, finalY);
-            doc.text('Beneficiário (Sócio)', secondSignatureX + signatureWidth / 2, finalY + 4, { align: 'center' });
+            doc.text(selectedSocio.nome, secondSignatureX + signatureWidth / 2, finalY + 4, { align: 'center' });
+            doc.text('Beneficiário (Sócio)', secondSignatureX + signatureWidth / 2, finalY + 8, { align: 'center', fontSize: 7, textColor: 'gray' });
         };
     
         // Draw the two receipts
@@ -542,3 +544,4 @@ export default function RciCalculator() {
         </div>
     );
 }
+
