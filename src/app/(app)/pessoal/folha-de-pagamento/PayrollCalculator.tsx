@@ -6,10 +6,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCompany } from '@/hooks/use-company';
-import { Funcionario } from '@/types/pessoal';
-import { Calculator, ArrowRight, Receipt, Loader2 } from 'lucide-react';
+import { Funcionario, Rubrica } from '@/types/pessoal';
+import { Calculator, ArrowRight, Receipt, Loader2, Plus, Trash2, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHeader, TableRow, TableHead, TableFooter } from '@/components/ui/table';
 import { Separator } from '@/components/ui/separator';
+import { MoneyInput } from '@/components/ui/money-input';
+
 
 // Simplified tax brackets for demonstration
 const inssBrackets = [
@@ -32,8 +34,8 @@ const irrfSimplifiedDeduction = 564.80;
 
 
 interface CalculationResult {
-    proventos: { label: string; value: number }[];
-    descontos: { label: string; value: number }[];
+    proventos: Rubrica[];
+    descontos: Rubrica[];
     totalProventos: number;
     totalDescontos: number;
     liquido: number;
@@ -50,6 +52,9 @@ export default function PayrollCalculator() {
     const [faltas, setFaltas] = useState<number>(0);
     const [horasExtras50, setHorasExtras50] = useState<number>(0);
     const [horasExtras100, setHorasExtras100] = useState<number>(0);
+    
+    const [manualProventos, setManualProventos] = useState<Rubrica[]>([]);
+    const [manualDescontos, setManualDescontos] = useState<Rubrica[]>([]);
 
     const [isLoading, setIsLoading] = useState(false);
     const [calculation, setCalculation] = useState<CalculationResult | null>(null);
@@ -57,6 +62,35 @@ export default function PayrollCalculator() {
     const selectedEmployee = useMemo(() => {
         return funcionarios.find(f => f.id.toString() === selectedEmployeeId);
     }, [selectedEmployeeId, funcionarios]);
+
+    const handleAddRubrica = (type: 'provento' | 'desconto') => {
+        const newRubrica: Rubrica = { id: Date.now(), label: '', value: 0 };
+        if (type === 'provento') {
+            setManualProventos(prev => [...prev, newRubrica]);
+        } else {
+            setManualDescontos(prev => [...prev, newRubrica]);
+        }
+    };
+
+    const handleUpdateRubrica = (type: 'provento' | 'desconto', id: number, field: 'label' | 'value', fieldValue: string | number) => {
+        const updater = (prev: Rubrica[]) => prev.map(r => 
+            r.id === id ? { ...r, [field]: fieldValue } : r
+        );
+        if (type === 'provento') {
+            setManualProventos(updater);
+        } else {
+            setManualDescontos(updater);
+        }
+    };
+
+    const handleRemoveRubrica = (type: 'provento' | 'desconto', id: number) => {
+        const remover = (prev: Rubrica[]) => prev.filter(r => r.id !== id);
+        if (type === 'provento') {
+            setManualProventos(remover);
+        } else {
+            setManualDescontos(remover);
+        }
+    };
 
     const handleCalculate = () => {
         if (!selectedEmployee) {
@@ -69,14 +103,16 @@ export default function PayrollCalculator() {
         // Simulate calculation delay
         setTimeout(() => {
             const salarioBase = selectedEmployee.salario;
-            const dsrValue = salarioBase / 30; // Simplified DSR
-
+            
             const valorHoraExtra50 = (salarioBase / 220) * 1.5 * horasExtras50;
             const valorHoraExtra100 = (salarioBase / 220) * 2 * horasExtras100;
             const valorFaltas = (salarioBase / 30) * faltas;
 
-            const totalProventos = salarioBase + valorHoraExtra50 + valorHoraExtra100;
-            const baseInss = totalProventos - valorFaltas;
+            const totalManualProventos = manualProventos.reduce((acc, p) => acc + p.value, 0);
+            const totalManualDescontos = manualDescontos.reduce((acc, p) => acc + p.value, 0);
+
+            const totalProventosBrutos = salarioBase + valorHoraExtra50 + valorHoraExtra100 + totalManualProventos;
+            const baseInss = totalProventosBrutos - valorFaltas;
 
             // INSS Calculation
             let inss = 0;
@@ -99,41 +135,47 @@ export default function PayrollCalculator() {
 
             // Simplified IRRF choice
             const irrfFromStandardDeduction = irrfBrackets.reduce((acc, bracket) => {
-                 if (baseIrrf <= bracket.limit) {
-                    return (baseIrrf * bracket.rate) - bracket.deduction;
+                 if (baseIrrf > bracket.limit) { // Corrected logic to check greater than
+                    let taxable = baseIrrf - bracket.limit;
+                    let nextBracketLimit = irrfBrackets[irrfBrackets.indexOf(bracket)+1]?.limit || Infinity;
+                    taxable = Math.min(taxable, nextBracketLimit - bracket.limit);
+                    return acc + (taxable * bracket.rate);
                 }
                 return acc;
             }, 0);
-
-            const baseIrrfSimplified = baseInss - irrfSimplifiedDeduction;
-            const irrfFromSimplifiedDeduction = irrfBrackets.reduce((acc, bracket) => {
-                 if (baseIrrfSimplified <= bracket.limit) {
-                    return (baseIrrfSimplified * bracket.rate) - bracket.deduction;
+            
+            let irrfFinal = 0;
+            for (const bracket of irrfBrackets) {
+                if (baseIrrf <= bracket.limit) {
+                    irrfFinal = (baseIrrf * bracket.rate) - bracket.deduction;
+                    break;
                 }
-                return acc;
-            }, 0);
+            }
+            irrfFinal = Math.max(0, parseFloat(irrfFinal.toFixed(2)));
 
-            const irrf = Math.max(0, Math.min(irrfFromStandardDeduction, irrfFromSimplifiedDeduction));
 
-            const totalDescontos = inss + irrf + valorFaltas;
-            const liquido = totalProventos - totalDescontos;
+            const totalDescontos = inss + irrfFinal + valorFaltas + totalManualDescontos;
+            const liquido = totalProventosBrutos - totalDescontos;
             
-            const proventos = [
-                { label: "Salário Base", value: salarioBase },
+            const proventos: Rubrica[] = [
+                { id: 1, label: "Salário Base", value: salarioBase },
             ];
-            if (valorHoraExtra50 > 0) proventos.push({ label: "Horas Extras 50%", value: valorHoraExtra50 });
-            if (valorHoraExtra100 > 0) proventos.push({ label: "Horas Extras 100%", value: valorHoraExtra100 });
-            
-            const descontos = [
-                { label: "INSS sobre Salário", value: inss },
-                { label: "IRRF sobre Salário", value: irrf },
+            if (valorHoraExtra50 > 0) proventos.push({ id: 2, label: "Horas Extras 50%", value: valorHoraExtra50 });
+            if (valorHoraExtra100 > 0) proventos.push({ id: 3, label: "Horas Extras 100%", value: valorHoraExtra100 });
+            proventos.push(...manualProventos.filter(p => p.label && p.value > 0));
+
+            const descontos: Rubrica[] = [
+                { id: 101, label: "INSS sobre Salário", value: inss },
+                { id: 102, label: "IRRF sobre Salário", value: irrfFinal },
             ];
-            if (valorFaltas > 0) descontos.push({ label: "Faltas", value: valorFaltas });
+            if (valorFaltas > 0) descontos.push({ id: 103, label: "Faltas", value: valorFaltas });
+            descontos.push(...manualDescontos.filter(d => d.label && d.value > 0));
+
 
             setCalculation({
                 proventos,
                 descontos,
-                totalProventos,
+                totalProventos: totalProventosBrutos,
                 totalDescontos,
                 liquido,
                 baseInss,
@@ -146,7 +188,7 @@ export default function PayrollCalculator() {
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-1">
+            <div className="lg:col-span-1 space-y-6">
                 <Card>
                     <CardHeader>
                         <CardTitle>Dados para Cálculo</CardTitle>
@@ -183,13 +225,41 @@ export default function PayrollCalculator() {
                             </div>
                         </div>
                     </CardContent>
-                    <CardFooter>
-                         <Button onClick={handleCalculate} disabled={!selectedEmployeeId || isLoading} className="w-full">
-                            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Calculator className="mr-2 h-4 w-4" />}
-                            {isLoading ? "Calculando..." : "Calcular Folha"}
-                        </Button>
-                    </CardFooter>
                 </Card>
+                 <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2"><ArrowUpCircle className="h-5 w-5 text-emerald-500" /> Proventos Manuais</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                        {manualProventos.map(p => (
+                            <div key={p.id} className="flex gap-2 items-center">
+                                <Input placeholder="Descrição (Ex: Bônus)" value={p.label} onChange={(e) => handleUpdateRubrica('provento', p.id, 'label', e.target.value)} />
+                                <MoneyInput id={`provento-${p.id}`} value={p.value} onValueChange={(val) => handleUpdateRubrica('provento', p.id, 'value', val)} />
+                                <Button variant="ghost" size="icon" onClick={() => handleRemoveRubrica('provento', p.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                            </div>
+                        ))}
+                        <Button variant="outline" size="sm" className="w-full" onClick={() => handleAddRubrica('provento')}><Plus className="mr-2 h-4 w-4" />Adicionar Provento</Button>
+                    </CardContent>
+                </Card>
+                 <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2"><ArrowDownCircle className="h-5 w-5 text-red-500" /> Descontos Manuais</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                        {manualDescontos.map(d => (
+                            <div key={d.id} className="flex gap-2 items-center">
+                                <Input placeholder="Descrição (Ex: Adiantamento)" value={d.label} onChange={(e) => handleUpdateRubrica('desconto', d.id, 'label', e.target.value)} />
+                                <MoneyInput id={`desconto-${d.id}`} value={d.value} onValueChange={(val) => handleUpdateRubrica('desconto', d.id, 'value', val)} />
+                                <Button variant="ghost" size="icon" onClick={() => handleRemoveRubrica('desconto', d.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                            </div>
+                        ))}
+                        <Button variant="outline" size="sm" className="w-full" onClick={() => handleAddRubrica('desconto')}><Plus className="mr-2 h-4 w-4" />Adicionar Desconto</Button>
+                    </CardContent>
+                </Card>
+                 <Button onClick={handleCalculate} disabled={!selectedEmployeeId || isLoading} className="w-full" size="lg">
+                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Calculator className="mr-2 h-4 w-4" />}
+                    {isLoading ? "Calculando..." : "Calcular Folha"}
+                </Button>
             </div>
             <div className="lg:col-span-2">
                 <Card className="min-h-[420px]">
@@ -217,7 +287,7 @@ export default function PayrollCalculator() {
                                         <Table>
                                              <TableBody>
                                                 {calculation.proventos.map(item => (
-                                                    <TableRow key={item.label}>
+                                                    <TableRow key={item.id}>
                                                         <TableCell>{item.label}</TableCell>
                                                         <TableCell className="text-right font-mono">{item.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                                                     </TableRow>
@@ -236,7 +306,7 @@ export default function PayrollCalculator() {
                                          <Table>
                                              <TableBody>
                                                 {calculation.descontos.map(item => (
-                                                    <TableRow key={item.label}>
+                                                    <TableRow key={item.id}>
                                                         <TableCell>{item.label}</TableCell>
                                                         <TableCell className="text-right font-mono">{item.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                                                     </TableRow>
