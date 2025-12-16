@@ -5,7 +5,7 @@ import { useState, useEffect, ChangeEvent, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { PackagePlus, Wrench, Upload, FileMinus, Receipt, MoreHorizontal, Search, Filter, Plus, FileUp, Trash2, X, Eye, Pencil, ChevronsUpDown, Check, Calculator } from "lucide-react";
+import { PackagePlus, Wrench, Upload, FileMinus, Receipt, MoreHorizontal, Search, Filter, Plus, FileUp, Trash2, X, Eye, Pencil, ChevronsUpDown, Check, Calculator, CalendarIcon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from 'next/navigation';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -28,8 +28,9 @@ import { NotaFiscal, ProductItem, ServiceItem, Product, Service } from "@/types/
 import { AuditLog, logAudit } from "@/lib/audit-log";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { Calendar } from "@/components/ui/calendar";
 
 
 const actions = [
@@ -129,6 +130,12 @@ export default function FiscalPage() {
     const [isRejectedFilesDialogOpen, setIsRejectedFilesDialogOpen] = useState(false);
     const [sourceXmlId, setSourceXmlId] = useState<number | undefined>(undefined);
 
+    const [filters, setFilters] = useState<{ startDate?: Date, endDate?: Date }>({});
+    const [isFilterPopoverOpen, setIsFilterPopoverOpen] = useState(false);
+
+    const handleClearFilters = () => {
+        setFilters({});
+    }
 
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -217,7 +224,7 @@ export default function FiscalPage() {
                         id: Date.now() + Math.random(),
                         fileName: file.name,
                         fileContent: content,
-                        date: new Date().toLocaleDateString('pt-BR'),
+                        date: new Date().toISOString(), // Use ISO for consistency
                         status: 'Importado',
                     });
                     successCount++;
@@ -534,7 +541,49 @@ export default function FiscalPage() {
                                         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                                         <Input placeholder="Buscar..." className="pl-9 w-full" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}/>
                                     </div>
-                                    <Button variant="outline"><Filter className="mr-2 h-4 w-4"/>Filtrar</Button>
+                                    <Popover open={isFilterPopoverOpen} onOpenChange={setIsFilterPopoverOpen}>
+                                        <PopoverTrigger asChild>
+                                            <Button variant="outline"><Filter className="mr-2 h-4 w-4"/>Filtrar</Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-80" align="end">
+                                            <div className="grid gap-4">
+                                                <div className="space-y-2">
+                                                    <h4 className="font-medium leading-none">Filtros</h4>
+                                                    <p className="text-sm text-muted-foreground">Filtre os documentos por data.</p>
+                                                </div>
+                                                <div className="grid gap-2">
+                                                    <div className="space-y-2">
+                                                        <Label>Data Inicial</Label>
+                                                        <Popover>
+                                                            <PopoverTrigger asChild>
+                                                                <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !filters.startDate && "text-muted-foreground")}>
+                                                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                                                    {filters.startDate ? format(filters.startDate, "dd/MM/yyyy", { locale: ptBR }) : <span>Selecione</span>}
+                                                                </Button>
+                                                            </PopoverTrigger>
+                                                            <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={filters.startDate} onSelect={(date) => setFilters(f => ({...f, startDate: date}))} initialFocus locale={ptBR} /></PopoverContent>
+                                                        </Popover>
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label>Data Final</Label>
+                                                        <Popover>
+                                                            <PopoverTrigger asChild>
+                                                                <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !filters.endDate && "text-muted-foreground")}>
+                                                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                                                    {filters.endDate ? format(filters.endDate, "dd/MM/yyyy", { locale: ptBR }) : <span>Selecione</span>}
+                                                                </Button>
+                                                            </PopoverTrigger>
+                                                            <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={filters.endDate} onSelect={(date) => setFilters(f => ({...f, endDate: date}))} initialFocus locale={ptBR} /></PopoverContent>
+                                                        </Popover>
+                                                    </div>
+                                                </div>
+                                                 <div className="flex justify-between">
+                                                    <Button variant="ghost" size="sm" onClick={handleClearFilters}>Limpar Filtros</Button>
+                                                    <Button size="sm" onClick={() => setIsFilterPopoverOpen(false)}>Aplicar</Button>
+                                                </div>
+                                            </div>
+                                        </PopoverContent>
+                                    </Popover>
                                 </div>
                             </div>
                             <div className="mt-4">
@@ -545,7 +594,7 @@ export default function FiscalPage() {
                                         renderRow={(item: XmlFile) => (
                                             <>
                                                 <TableCell className="font-medium">{item.fileName}</TableCell>
-                                                <TableCell>{item.date}</TableCell>
+                                                <TableCell>{format(parseISO(item.date), 'dd/MM/yyyy', { locale: ptBR })}</TableCell>
                                                 <TableCell>
                                                     <Badge variant={
                                                         item.status === 'Lançado' ? 'default' :
@@ -559,16 +608,17 @@ export default function FiscalPage() {
                                         onLancar={handleLancarXml}
                                         onDelete={handleDeleteXml}
                                         searchTerm={searchTerm}
+                                        filters={filters}
                                     />
                                 </TabsContent>
                                 <TabsContent value="produtos">
-                                    <NotasFiscaisTable data={notasProduto} tipo="produto" onDelete={handleDeleteNota} onView={handleViewNota} onEdit={handleEditNota} searchTerm={searchTerm} />
+                                    <NotasFiscaisTable data={notasProduto} tipo="produto" onDelete={handleDeleteNota} onView={handleViewNota} onEdit={handleEditNota} searchTerm={searchTerm} filters={filters}/>
                                 </TabsContent>
                                 <TabsContent value="saidas">
-                                    <NotasFiscaisTable data={notasSaida} tipo="saida" onDelete={handleDeleteNota} onView={handleViewNota} onEdit={handleEditNota} searchTerm={searchTerm} />
+                                    <NotasFiscaisTable data={notasSaida} tipo="saida" onDelete={handleDeleteNota} onView={handleViewNota} onEdit={handleEditNota} searchTerm={searchTerm} filters={filters}/>
                                 </TabsContent>
                                 <TabsContent value="servicos">
-                                    <NotasFiscaisTable data={notasServico} tipo="servico" onDelete={handleDeleteNota} onView={handleViewNota} onEdit={handleEditNota} searchTerm={searchTerm} />
+                                    <NotasFiscaisTable data={notasServico} tipo="servico" onDelete={handleDeleteNota} onView={handleViewNota} onEdit={handleEditNota} searchTerm={searchTerm} filters={filters}/>
                                 </TabsContent>
                                 <TabsContent value="recibos">
                                     <div className="text-center py-10">
@@ -684,6 +734,7 @@ function RecentDocumentsTable({
     onLancar,
     onDelete,
     searchTerm,
+    filters,
 }: { 
     headers: string[], 
     data: XmlFile[], 
@@ -691,15 +742,23 @@ function RecentDocumentsTable({
     onLancar?: (id: number) => void,
     onDelete?: (id: number) => void,
     searchTerm: string,
+    filters: { startDate?: Date, endDate?: Date },
 }) {
     const { toast } = useToast();
     const [itemToDelete, setItemToDelete] = useState<any | null>(null);
 
     const filteredData = useMemo(() => {
-        return data.filter(item => 
-            item.fileName.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-    }, [data, searchTerm]);
+        return data.filter(item => {
+            const searchMatch = item.fileName.toLowerCase().includes(searchTerm.toLowerCase());
+            
+            const date = parseISO(item.date);
+            const dateMatch = 
+                (!filters.startDate || date >= filters.startDate) &&
+                (!filters.endDate || date <= filters.endDate);
+
+            return searchMatch && dateMatch;
+        });
+    }, [data, searchTerm, filters]);
 
 
     const handleDeleteClick = (item: any) => {
@@ -788,6 +847,7 @@ function NotasFiscaisTable({
     onView,
     onEdit,
     searchTerm,
+    filters,
 }: { 
     data: NotaFiscal[], 
     tipo: 'produto' | 'saida' | 'servico',
@@ -795,6 +855,7 @@ function NotasFiscaisTable({
     onView: (nota: NotaFiscal) => void,
     onEdit: (nota: NotaFiscal) => void,
     searchTerm: string,
+    filters: { startDate?: Date, endDate?: Date },
 }) {
     const [itemToDelete, setItemToDelete] = useState<NotaFiscal | null>(null);
 
@@ -803,11 +864,21 @@ function NotasFiscaisTable({
             const numero = item.dados.geral?.numero || item.dados.identificacao?.numero || '';
             const emitente = item.dados.emitente?.razaoSocial || item.dados.prestador?.razaoSocial || '';
             const destinatario = item.dados.destinatario?.razaoSocial || item.dados.tomador?.razaoSocial || '';
-            return numero.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            const searchMatch = numero.toLowerCase().includes(searchTerm.toLowerCase()) ||
                    emitente.toLowerCase().includes(searchTerm.toLowerCase()) ||
                    destinatario.toLowerCase().includes(searchTerm.toLowerCase());
+
+            const dateString = item.dados.geral?.dataEmissao || item.dados.identificacao?.dataEmissao;
+            if (!dateString) return searchMatch && !filters.startDate && !filters.endDate;
+
+            const date = new Date(dateString);
+            const dateMatch = 
+                (!filters.startDate || date >= filters.startDate) &&
+                (!filters.endDate || date <= filters.endDate);
+
+            return searchMatch && dateMatch;
         });
-    }, [data, searchTerm]);
+    }, [data, searchTerm, filters]);
 
 
     const handleDeleteClick = (item: NotaFiscal) => {
@@ -831,8 +902,8 @@ function NotasFiscaisTable({
     }
     
     const headers = tipo === 'servico' 
-        ? ['Número', 'Data', 'Prestador', 'Tomador', 'Valor Total']
-        : ['Número', 'Data', 'Emitente', 'Destinatário', 'Valor Total'];
+        ? ['Número', 'Data Emissão', 'Prestador', 'Tomador', 'Valor Total']
+        : ['Número', 'Data Emissão', 'Emitente', 'Destinatário', 'Valor Total'];
 
 
     const renderRow = (item: NotaFiscal) => {
