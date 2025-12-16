@@ -28,7 +28,7 @@ import { NotaFiscal, ProductItem, ServiceItem, Product, Service } from "@/types/
 import { AuditLog, logAudit } from "@/lib/audit-log";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Calendar } from "@/components/ui/calendar";
 
@@ -594,7 +594,7 @@ export default function FiscalPage() {
                                         renderRow={(item: XmlFile) => (
                                             <>
                                                 <TableCell className="font-medium">{item.fileName}</TableCell>
-                                                <TableCell>{format(parseISO(item.date), 'dd/MM/yyyy', { locale: ptBR })}</TableCell>
+                                                <TableCell>{isValid(new Date(item.date)) ? format(parseISO(item.date), 'dd/MM/yyyy', { locale: ptBR }) : 'N/A'}</TableCell>
                                                 <TableCell>
                                                     <Badge variant={
                                                         item.status === 'Lançado' ? 'default' :
@@ -751,6 +751,9 @@ function RecentDocumentsTable({
         return data.filter(item => {
             const searchMatch = item.fileName.toLowerCase().includes(searchTerm.toLowerCase());
             
+            if (!item.date || !isValid(new Date(item.date))) {
+                return searchMatch;
+            }
             const date = parseISO(item.date);
             const dateMatch = 
                 (!filters.startDate || date >= filters.startDate) &&
@@ -869,7 +872,9 @@ function NotasFiscaisTable({
                    destinatario.toLowerCase().includes(searchTerm.toLowerCase());
 
             const dateString = item.dados.geral?.dataEmissao || item.dados.identificacao?.dataEmissao;
-            if (!dateString) return searchMatch && !filters.startDate && !filters.endDate;
+            if (!dateString || !isValid(new Date(dateString))) {
+                return searchMatch;
+            };
 
             const date = new Date(dateString);
             const dateMatch = 
@@ -912,7 +917,7 @@ function NotasFiscaisTable({
             : (item.items as ProductItem[]).reduce((acc: number, product) => acc + product.total, 0);
 
         const dataEmissao = item.dados.geral?.dataEmissao || item.dados.identificacao?.dataEmissao;
-        const formattedDate = dataEmissao ? format(new Date(dataEmissao), 'dd/MM/yyyy', { locale: ptBR }) : 'N/A';
+        const formattedDate = dataEmissao && isValid(new Date(dataEmissao)) ? format(new Date(dataEmissao), 'dd/MM/yyyy', { locale: ptBR }) : 'N/A';
 
         return (
             <>
