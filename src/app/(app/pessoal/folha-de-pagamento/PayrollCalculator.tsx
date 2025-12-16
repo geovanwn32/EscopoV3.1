@@ -8,11 +8,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCompany } from '@/hooks/use-company';
 import { Funcionario } from '@/types/pessoal';
-import { Plus, Trash2, Info, RefreshCw, X, Copy, Wand2, Paperclip, Calendar, MoreHorizontal, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Filter, Search } from 'lucide-react';
+import { Plus, Trash2, Info, RefreshCw, X, Copy, Wand2, Paperclip, Calendar as CalendarIcon, MoreHorizontal, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Filter, Search } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHeader, TableRow, TableHead, TableFooter } from '@/components/ui/table';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
+import { Calendar } from '@/components/ui/calendar';
+import { cn } from '@/lib/utils';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+
 
 interface PayrollEvent {
     id: number;
@@ -34,6 +39,8 @@ export default function PayrollCalculator() {
     const [funcionarios] = useScopedData<Funcionario[]>('cadastros-funcionarios', []);
     
     const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
+    const [calculationType, setCalculationType] = useState('mensal');
+    const [competenceDate, setCompetenceDate] = useState<Date | undefined>(new Date());
     
     const initialEvents: PayrollEvent[] = [
         { id: 1, type: 'provento', code: 1, description: 'SALÁRIO BASE', reference: 17.00, calculationBasis: { cp: true, fg: true, ir: true }, provento: 1133.33, desconto: 0 },
@@ -69,7 +76,7 @@ export default function PayrollCalculator() {
                         <Button variant="outline" size="icon"><Wand2 className="h-4 w-4" /></Button>
                         <Button variant="outline" size="icon"><Info className="h-4 w-4" /></Button>
                         <Button variant="outline" size="icon"><Paperclip className="h-4 w-4" /></Button>
-                        <Button variant="outline" size="icon"><Calendar className="h-4 w-4" /></Button>
+                        <Button variant="outline" size="icon"><CalendarIcon className="h-4 w-4" /></Button>
                         <Button variant="default">PG</Button>
                     </div>
                 </div>
@@ -86,15 +93,39 @@ export default function PayrollCalculator() {
                         </Select>
                     </div>
                      <div className="col-span-1 md:col-span-2 lg:col-span-2 space-y-2">
-                        <Label htmlFor="period">Período</Label>
-                        <div className="flex items-center gap-1">
-                            <Input id="period" value="Período de: 14/06/2023 à 30/06/2023 - Mensal" readOnly />
-                             <Popover>
-                                <PopoverTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></PopoverTrigger>
-                                <PopoverContent>...</PopoverContent>
+                        <Label>Período</Label>
+                         <div className="flex items-center gap-2">
+                             <Select value={calculationType} onValueChange={setCalculationType}>
+                                <SelectTrigger className='w-[150px]'>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="mensal">Folha Mensal</SelectItem>
+                                    <SelectItem value="adiantamento">Adiantamento</SelectItem>
+                                    <SelectItem value="ferias">Férias</SelectItem>
+                                    <SelectItem value="13-salario">13º Salário</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant={"outline"}
+                                        className={cn("w-full justify-start text-left font-normal", !competenceDate && "text-muted-foreground")}
+                                    >
+                                        <CalendarIcon className="mr-2 h-4 w-4" />
+                                        {competenceDate ? format(competenceDate, "MM/yyyy", { locale: ptBR }) : <span>Selecione o mês</span>}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0">
+                                    <Calendar
+                                        mode="single"
+                                        selected={competenceDate}
+                                        onSelect={setCompetenceDate}
+                                        initialFocus
+                                        locale={ptBR}
+                                    />
+                                </PopoverContent>
                             </Popover>
-                            <Button variant="ghost" size="icon"><RefreshCw className="h-4 w-4"/></Button>
-                            <Button variant="ghost" size="icon"><X className="h-4 w-4"/></Button>
                         </div>
                     </div>
                      <div className="col-span-2 md:col-span-2 lg:col-span-1 flex items-end justify-end">
@@ -213,5 +244,3 @@ export default function PayrollCalculator() {
         </Card>
     );
 }
-
-    
