@@ -92,13 +92,40 @@ export default function PayrollCalculator() {
                             </SelectContent>
                         </Select>
                     </div>
-                     <div className="col-span-2 md:col-span-2 lg:col-span-1 flex items-end justify-end">
-                         <div className="flex items-center">
-                            <p className="text-sm text-muted-foreground whitespace-nowrap">01 de 1 Registro</p>
-                            <Button variant="ghost" size="icon" disabled><ChevronsLeft className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="icon" disabled><ChevronLeft className="h-4 w-4" /></Button>
-                             <Button variant="ghost" size="icon"><ChevronRight className="h-4 w-4" /></Button>
-                             <Button variant="ghost" size="icon"><ChevronsRight className="h-4 w-4" /></Button>
+                     <div className="col-span-2 md:col-span-2 lg:col-span-2 space-y-2">
+                        <Label>Período</Label>
+                         <div className="flex items-center gap-2">
+                             <Select value={calculationType} onValueChange={setCalculationType}>
+                                <SelectTrigger className='w-[150px]'>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="mensal">Folha Mensal</SelectItem>
+                                    <SelectItem value="adiantamento">Adiantamento</SelectItem>
+                                    <SelectItem value="ferias">Férias</SelectItem>
+                                    <SelectItem value="13-salario">13º Salário</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant={"outline"}
+                                        className={cn("w-full justify-start text-left font-normal", !competenceDate && "text-muted-foreground")}
+                                    >
+                                        <CalendarIcon className="mr-2 h-4 w-4" />
+                                        {competenceDate ? format(competenceDate, "MM/yyyy", { locale: ptBR }) : <span>Selecione o mês</span>}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0">
+                                    <Calendar
+                                        mode="single"
+                                        selected={competenceDate}
+                                        onSelect={setCompetenceDate}
+                                        initialFocus
+                                        locale={ptBR}
+                                    />
+                                </PopoverContent>
+                            </Popover>
                         </div>
                     </div>
                      <div className="col-span-1 lg:col-span-1 space-y-2">
