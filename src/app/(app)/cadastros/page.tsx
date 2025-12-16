@@ -1,6 +1,6 @@
 'use client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Package, Users, Handshake, Briefcase, FileText, FileSignature, Scale, Table, Globe, BookText, AreaChart } from 'lucide-react';
+import { Package, Users, Handshake, Briefcase, FileText, FileSignature, Scale, Table, Globe, BookText, AreaChart, Tags } from 'lucide-react';
 import Link from 'next/link';
 
 const cadastroItens = [
@@ -45,6 +45,13 @@ const cadastroItens = [
         label: 'Usuários e Perfis',
         description: 'Gerencie usuários, perfis e permissões de acesso.',
         color: "text-orange-600 bg-orange-100/80 group-hover:bg-orange-600 dark:bg-orange-900/40 dark:text-orange-400 dark:group-hover:bg-orange-500",
+    },
+    {
+        href: '/cadastros/rubricas',
+        icon: <Tags className="h-8 w-8" />,
+        label: 'Rubricas',
+        description: 'Gerencie rubricas do eSocial e da folha de pagamento.',
+        color: "text-pink-600 bg-pink-100/80 group-hover:bg-pink-600 dark:bg-pink-900/40 dark:text-pink-400 dark:group-hover:bg-pink-500",
     },
     {
         href: '/cadastros/cfop',
