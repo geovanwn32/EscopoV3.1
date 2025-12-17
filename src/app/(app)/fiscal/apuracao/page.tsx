@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -12,7 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { NotaFiscal, ProductItem, ServiceItem } from '@/types/fiscal';
 import { ApuracaoImpostos } from '@/types/apuracao';
 import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import 'jspdf-autotable';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -22,6 +21,13 @@ interface ApuracaoResult {
   impostoDevido: number;
   baseCalculo: number;
   aliquotaEfetiva: number;
+}
+
+// Augment jsPDF interface
+declare module 'jspdf' {
+    interface jsPDF {
+        autoTable: (options: any) => jsPDF;
+    }
 }
 
 export default function ApuracaoPage() {
@@ -135,7 +141,7 @@ export default function ApuracaoPage() {
         doc.setFontSize(10);
         doc.text('(SIMULAÇÃO)', pageWidth / 2, 25, { align: 'center' });
 
-        autoTable(doc, {
+        doc.autoTable({
             startY: 35,
             theme: 'grid',
             head: [['Contribuinte']],
@@ -154,7 +160,7 @@ export default function ApuracaoPage() {
         doc.text('Valor a Pagar', pageMargin, finalY);
         finalY += 5;
         
-        autoTable(doc, {
+        doc.autoTable({
             startY: finalY,
             theme: 'grid',
             head: [['Descrição do Débito', 'Valor Principal']],
