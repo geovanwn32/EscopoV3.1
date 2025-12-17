@@ -87,7 +87,7 @@ export default function DashboardPage() {
       { id: 'despesas', title: 'Compras/Despesas', value: kpiData.despesas.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL'}), icon: <Briefcase/>, variant: 'default' },
       { id: 'notas', title: 'Notas Emitidas', value: kpiData.notasEmitidas.toString(), icon: <FileText />, variant: 'default' },
       { id: 'resultado', title: 'Resultado', value: kpiData.resultado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL'}), icon: <ArrowRight />, variant: 'primary' },
-  ];
+  ] as const;
   
   const allNotifications = useMemo(() => {
     const today = new Date();
