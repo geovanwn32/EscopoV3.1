@@ -1,11 +1,11 @@
 
 'use client';
 
-import { useState, useEffect, ChangeEvent, useMemo } from "react";
+import { useState, useEffect, ChangeEvent, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { PackagePlus, Wrench, Upload, FileMinus, Receipt, MoreHorizontal, Search, Filter, Plus, FileUp, Trash2, X, Eye, Pencil, ChevronsUpDown, Check, Calculator, Calendar as CalendarIcon } from "lucide-react";
+import { PackagePlus, Wrench, Upload, FileMinus, Receipt, MoreHorizontal, Search, Filter, Plus, FileUp, Trash2, X, Eye, Pencil, ChevronsUpDown, Check, Calculator, Calendar as CalendarIcon, ArrowUpRight, ArrowDownRight, DollarSign, TrendingUp, TrendingDown, FileStack } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from 'next/navigation';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -28,7 +28,7 @@ import { NotaFiscal, ProductItem, ServiceItem, Product, Service } from "@/types/
 import { AuditLog, logAudit } from "@/lib/audit-log";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { format, parseISO, isValid } from 'date-fns';
+import { format, parseISO, isValid, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Calendar } from "@/components/ui/calendar";
 
@@ -102,6 +102,21 @@ function RejectedFilesDialog({ title, files, open, onOpenChange }: { title: stri
     );
 }
 
+function KpiCard({ title, value, icon, description }: { title: string; value: string; icon: React.ReactNode; description: string; }) {
+    return (
+        <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">{title}</CardTitle>
+                <div className="text-muted-foreground">{icon}</div>
+            </CardHeader>
+            <CardContent>
+                <div className="text-2xl font-bold">{value}</div>
+                <p className="text-xs text-muted-foreground">{description}</p>
+            </CardContent>
+        </Card>
+    );
+}
+
 
 export default function FiscalPage() {
     const { toast } = useToast();
@@ -130,13 +145,34 @@ export default function FiscalPage() {
     const [isRejectedFilesDialogOpen, setIsRejectedFilesDialogOpen] = useState(false);
     const [sourceXmlId, setSourceXmlId] = useState<number | undefined>(undefined);
 
-    const [filters, setFilters] = useState<{ startDate?: Date, endDate?: Date }>({});
+    const [filters, setFilters] = useState<{ startDate?: Date, endDate?: Date }>({
+        startDate: startOfMonth(new Date()),
+        endDate: endOfMonth(new Date()),
+    });
     const [isFilterPopoverOpen, setIsFilterPopoverOpen] = useState(false);
+
+    const kpiData = useMemo(() => {
+        const filterByDate = (nota: NotaFiscal) => {
+            const dataEmissao = nota.dados.geral?.dataEmissao || nota.dados.identificacao?.dataEmissao;
+            if (!dataEmissao) return false;
+            const date = new Date(dataEmissao);
+            return (!filters.startDate || date >= filters.startDate) && (!filters.endDate || date <= filters.endDate);
+        };
+
+        const faturamento = [...notasSaida, ...notasServico]
+            .filter(filterByDate)
+            .reduce((acc, nota) => acc + (nota.items as any[]).reduce((itemAcc, item) => itemAcc + (item.total || item.value || 0), 0), 0);
+
+        const compras = notasProduto
+            .filter(filterByDate)
+            .reduce((acc, nota) => acc + (nota.items as ProductItem[]).reduce((itemAcc, item) => itemAcc + item.total, 0), 0);
+
+        return { faturamento, compras };
+    }, [notasSaida, notasServico, notasProduto, filters]);
 
     const handleClearFilters = () => {
         setFilters({});
     }
-
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         if (!currentCompany) {
@@ -151,7 +187,6 @@ export default function FiscalPage() {
              toast({ variant: 'destructive', title: 'CNPJ da empresa não encontrado', description: 'Cadastre o CNPJ na tela "Minha Empresa" para validar os arquivos.' });
             return;
         }
-
 
         const files = event.target.files;
         if (!files || files.length === 0) return;
@@ -172,13 +207,10 @@ export default function FiscalPage() {
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     const content = e.target?.result as string;
-
-                    // 1. Check for duplicates (file name and content)
                     const isDuplicate = xmls.some(
                         existingFile => existingFile.fileName === file.name && existingFile.fileContent === content
                     );
 
-                    // 2. Check if already launched (by nota number)
                     const numeroNotaMatch = content.match(/<nNF>(.*?)<\/nNF>/) || content.match(/<Numero>(.*?)<\/Numero>/);
                     const numeroNota = numeroNotaMatch ? numeroNotaMatch[1] : null;
                     const isAlreadyLaunched = numeroNota ? allNotaNumeros.includes(numeroNota) : false;
@@ -189,18 +221,15 @@ export default function FiscalPage() {
                         return;
                     }
                     
-                    // 3. Professional CNPJ Validation
                     const getCnpjsFromXml = (xmlContent: string): string[] => {
                         const cnpjs: Set<string> = new Set();
                         
-                        // NFe (emitente/destinatario)
                         const emitCnpj = xmlContent.match(/<emit>[\s\S]*?<CNPJ>(.*?)<\/CNPJ>/)?.[1];
                         const destCnpj = xmlContent.match(/<dest>[\s\S]*?<CNPJ>(.*?)<\/CNPJ>/)?.[1];
                         
                         if (emitCnpj) cnpjs.add(emitCnpj.replace(/\D/g, ''));
                         if (destCnpj) cnpjs.add(destCnpj.replace(/\D/g, ''));
 
-                        // NFSe (prestador/tomador) - various formats
                         const prestadorCnpj = xmlContent.match(/<Prestador(?:Servico)?>[\s\S]*?<Cnpj>(.*?)<\/Cnpj>/)?.[1] || xmlContent.match(/<emit>[\s\S]*?<CNPJ>(.*?)<\/CNPJ>/)?.[1];
                         const tomadorCnpj = xmlContent.match(/<Tomador(?:Servico)?>[\s\S]*?<Cnpj>(.*?)<\/Cnpj>/)?.[1] || xmlContent.match(/<(?:dest|toma)>[\s\S]*?<CNPJ>(.*?)<\/CNPJ>/)?.[1];
 
@@ -219,12 +248,11 @@ export default function FiscalPage() {
                         return;
                     }
 
-                    // If all checks pass
                     newFiles.push({
                         id: Date.now() + Math.random(),
                         fileName: file.name,
                         fileContent: content,
-                        date: new Date().toISOString(), // Use ISO for consistency
+                        date: new Date().toISOString(),
                         status: 'Importado',
                     });
                     successCount++;
@@ -265,8 +293,6 @@ export default function FiscalPage() {
                     action: <Button variant="secondary" size="sm" onClick={() => setIsRejectedFilesDialogOpen(true)}>Ver Detalhes</Button>,
                 });
             }
-
-            // Reset the input field
             event.target.value = '';
         });
     };
@@ -279,10 +305,9 @@ export default function FiscalPage() {
         let detectedModel: 'produto' | 'servico' | null = null;
         let parsedData = {};
 
-        // Helper to save partner
         const savePartner = (partnerData: Omit<Partner, 'id' | 'type'> & { type: Partner['type'] | null }) => {
             const doc = partnerData.document.replace(/\D/g, '');
-            if (!doc || !partnerData.name) return; // Don't save if essential info is missing
+            if (!doc || !partnerData.name) return;
             const existingPartner = partners.find(p => p.document.replace(/\D/g, '') === doc);
             
             if (!existingPartner) {
@@ -291,7 +316,7 @@ export default function FiscalPage() {
                     document: partnerData.document,
                     name: partnerData.name,
                     personType: doc.length > 11 ? 'JURIDICA' : 'FISICA',
-                    type: partnerData.type || (doc.length > 11 ? 'Fornecedor' : 'Cliente'), // Default type logic
+                    type: partnerData.type || (doc.length > 11 ? 'Fornecedor' : 'Cliente'),
                 };
                 setPartners(prev => [...prev, newPartner]);
                 toast({
@@ -305,15 +330,12 @@ export default function FiscalPage() {
             if (!isoDate) return '';
             try {
                 const date = new Date(isoDate);
-                // Formats to "YYYY-MM-DDTHH:mm" which is required by datetime-local input
                 return date.toISOString().slice(0, 16);
             } catch (e) {
                 return '';
             }
         }
 
-
-        // Simulating XML parsing
         if (content.includes('<infNFe') && content.includes('<NFe')) {
             detectedModel = 'produto';
             const products = Array.from(content.matchAll(/<det nItem="(\d+)">([\s\S]*?)<\/det>/g)).map(match => {
@@ -355,7 +377,7 @@ export default function FiscalPage() {
              parsedData = {
                 identificacao: {
                     numero: content.match(/<Numero>(.*?)<\/Numero>/)?.[1] || '',
-                    serie: content.match(/<Serie>(.*?)<\/Serie>/)?.[1] || 'U', // Default to 'U' if not found
+                    serie: content.match(/<Serie>(.*?)<\/Serie>/)?.[1] || 'U',
                     dataEmissao: formatISODateToInput(content.match(/<DataEmissao>(.*?)<\/DataEmissao>/)?.[1] || content.match(/<dhEmi>(.*?)<\/dhEmi>/)?.[1]),
                 },
                 prestador: {
@@ -380,7 +402,7 @@ export default function FiscalPage() {
         }
 
         if (detectedModel) {
-            setSourceXmlId(xmlFile.id); // Store the source XML ID
+            setSourceXmlId(xmlFile.id);
             openLancamentoDialog(detectedModel, parsedData);
             setXmls(prevXmls => prevXmls.map(x => x.id === id ? { ...x, status: 'Lançado' } : x));
         } else {
@@ -392,6 +414,42 @@ export default function FiscalPage() {
              setXmls(prevXmls => prevXmls.map(x => x.id === id ? { ...x, status: 'Erro' } : x));
         }
     };
+    
+    const handleBatchLancar = (selectedIds: number[]) => {
+        selectedIds.forEach(id => handleLancarXml(id));
+        toast({ title: `${selectedIds.length} XMLs enviados para lançamento.`});
+    };
+
+    const handleBatchDelete = (selectedIds: number[], currentList: 'xmls' | 'produtos' | 'saidas' | 'servicos') => {
+        if (currentList === 'xmls') {
+            const lancados = xmls.filter(x => selectedIds.includes(x.id) && x.status === 'Lançado');
+            if (lancados.length > 0) {
+                toast({ variant: "destructive", title: "Ação não permitida", description: "Não é possível excluir XMLs que já foram lançados. Exclua a nota fiscal primeiro." });
+                return;
+            }
+            setXmls(prev => prev.filter(x => !selectedIds.includes(x.id)));
+        } else {
+            const notaLists = {
+                produtos: notasProduto,
+                saidas: notasSaida,
+                servicos: notasServico,
+            };
+            const notasToDelete = notaLists[currentList].filter(n => selectedIds.includes(n.id));
+            const xmlIdsToRevert = notasToDelete.map(n => n.sourceXmlId).filter(Boolean);
+
+            if (xmlIdsToRevert.length > 0) {
+                setXmls(prevXmls => prevXmls.map(xml => 
+                    xmlIdsToRevert.includes(xml.id) ? { ...xml, status: 'Importado' } : xml
+                ));
+            }
+            
+            if (currentList === 'produtos') setNotasProduto(prev => prev.filter(n => !selectedIds.includes(n.id)));
+            if (currentList === 'saidas') setNotasSaida(prev => prev.filter(n => !selectedIds.includes(n.id)));
+            if (currentList === 'servicos') setNotasServico(prev => prev.filter(n => !selectedIds.includes(n.id)));
+        }
+        toast({ variant: 'destructive', title: `${selectedIds.length} item(s) excluídos.` });
+    };
+
 
     const handleDeleteXml = (id: number) => {
         const xmlFile = xmls.find(x => x.id === id);
@@ -425,7 +483,6 @@ export default function FiscalPage() {
 
     const handleSaveNota = (savedNota: any) => {
         if (editingNota) {
-            // Update existing note
             const updateList = (list: NotaFiscal[]) => list.map(n => n.id === editingNota.id ? { ...savedNota, id: editingNota.id } : n);
             if (editingNota.tipo === 'entrada' || editingNota.tipo === 'produto') setNotasProduto(updateList);
             if (editingNota.tipo === 'saida') setNotasSaida(updateList);
@@ -438,11 +495,10 @@ export default function FiscalPage() {
             setEditingNota(null);
 
         } else {
-            // Add new note
             const notaComId: NotaFiscal = {
                 ...savedNota,
                 id: Date.now(),
-                sourceXmlId: sourceXmlId, // Attach the source XML ID
+                sourceXmlId: sourceXmlId,
             };
             if (notaComId.tipo === 'entrada') {
                 setNotasProduto(prev => [...prev, notaComId]);
@@ -457,7 +513,7 @@ export default function FiscalPage() {
             });
         }
         setIsLancamentoDialogOpen(false); 
-        setSourceXmlId(undefined); // Clean up source ID
+        setSourceXmlId(undefined);
     };
 
     const handleDeleteNota = (nota: NotaFiscal) => {
@@ -466,7 +522,6 @@ export default function FiscalPage() {
         if (nota.tipo === 'saida') setNotasSaida(removeNota);
         if (nota.tipo === 'servico') setNotasServico(removeNota);
 
-        // Revert XML status if it came from an XML
         if (nota.sourceXmlId) {
             setXmls(prevXmls => prevXmls.map(xml => 
                 xml.id === nota.sourceXmlId ? { ...xml, status: 'Importado' } : xml
@@ -482,7 +537,7 @@ export default function FiscalPage() {
 
     const handleViewNota = (nota: NotaFiscal) => {
         const tipo = nota.tipo === 'entrada' ? 'produto' : nota.tipo;
-        setEditingNota(nota); // Set editingNota to pass full object
+        setEditingNota(nota);
         openLancamentoDialog(tipo as any, nota.dados, true);
     };
 
@@ -492,6 +547,8 @@ export default function FiscalPage() {
         openLancamentoDialog(tipo as any, nota.dados, false);
     };
     
+    const formatCurrency = (value: number) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
     return (
         <>
             <div className="space-y-6">
@@ -501,6 +558,14 @@ export default function FiscalPage() {
                     Importe XMLs ou lance manualmente suas notas e recibos.
                 </p>
                 </div>
+                
+                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                    <KpiCard title="Faturamento no Período" value={formatCurrency(kpiData.faturamento)} icon={<TrendingUp />} description={`Baseado nas notas de saída e serviço.`}/>
+                    <KpiCard title="Entradas no Período" value={formatCurrency(kpiData.compras)} icon={<TrendingDown />} description={`Baseado nas notas de entrada.`}/>
+                    <KpiCard title="Resultado (Simples)" value={formatCurrency(kpiData.faturamento - kpiData.compras)} icon={<DollarSign />} description={`Faturamento - Entradas.`} />
+                    <KpiCard title="Total de Documentos" value={`${notasProduto.length + notasSaida.length + notasServico.length}`} icon={<FileStack />} description="Total de notas lançadas." />
+                </div>
+
 
                 <Card>
                     <CardContent className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 pt-6">
@@ -606,19 +671,21 @@ export default function FiscalPage() {
                                             </>
                                         )}
                                         onLancar={handleLancarXml}
+                                        onBatchLancar={handleBatchLancar}
+                                        onBatchDelete={(ids) => handleBatchDelete(ids, 'xmls')}
                                         onDelete={handleDeleteXml}
                                         searchTerm={searchTerm}
                                         filters={filters}
                                     />
                                 </TabsContent>
                                 <TabsContent value="produtos">
-                                    <NotasFiscaisTable data={notasProduto} tipo="produto" onDelete={handleDeleteNota} onView={handleViewNota} onEdit={handleEditNota} searchTerm={searchTerm} filters={filters}/>
+                                    <NotasFiscaisTable data={notasProduto} tipo="produto" onDelete={handleDeleteNota} onView={handleViewNota} onEdit={handleEditNota} searchTerm={searchTerm} filters={filters} onBatchDelete={(ids) => handleBatchDelete(ids, 'produtos')}/>
                                 </TabsContent>
                                 <TabsContent value="saidas">
-                                    <NotasFiscaisTable data={notasSaida} tipo="saida" onDelete={handleDeleteNota} onView={handleViewNota} onEdit={handleEditNota} searchTerm={searchTerm} filters={filters}/>
+                                    <NotasFiscaisTable data={notasSaida} tipo="saida" onDelete={handleDeleteNota} onView={handleViewNota} onEdit={handleEditNota} searchTerm={searchTerm} filters={filters} onBatchDelete={(ids) => handleBatchDelete(ids, 'saidas')}/>
                                 </TabsContent>
                                 <TabsContent value="servicos">
-                                    <NotasFiscaisTable data={notasServico} tipo="servico" onDelete={handleDeleteNota} onView={handleViewNota} onEdit={handleEditNota} searchTerm={searchTerm} filters={filters}/>
+                                    <NotasFiscaisTable data={notasServico} tipo="servico" onDelete={handleDeleteNota} onView={handleViewNota} onEdit={handleEditNota} searchTerm={searchTerm} filters={filters} onBatchDelete={(ids) => handleBatchDelete(ids, 'servicos')}/>
                                 </TabsContent>
                                 <TabsContent value="recibos">
                                     <div className="text-center py-10">
@@ -733,6 +800,8 @@ function RecentDocumentsTable({
     renderRow,
     onLancar,
     onDelete,
+    onBatchLancar,
+    onBatchDelete,
     searchTerm,
     filters,
 }: { 
@@ -741,11 +810,15 @@ function RecentDocumentsTable({
     renderRow: (item: any) => React.ReactNode,
     onLancar?: (id: number) => void,
     onDelete?: (id: number) => void,
+    onBatchLancar?: (ids: number[]) => void,
+    onBatchDelete?: (ids: number[]) => void,
     searchTerm: string,
     filters: { startDate?: Date, endDate?: Date },
 }) {
-    const { toast } = useToast();
     const [itemToDelete, setItemToDelete] = useState<any | null>(null);
+    const [selectedRows, setSelectedRows] = useState<number[]>([]);
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
 
     const filteredData = useMemo(() => {
         return data.filter(item => {
@@ -762,7 +835,21 @@ function RecentDocumentsTable({
             return searchMatch && dateMatch;
         });
     }, [data, searchTerm, filters]);
+    
+    const paginatedData = useMemo(() => {
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        return filteredData.slice(startIndex, startIndex + itemsPerPage);
+    }, [filteredData, currentPage, itemsPerPage]);
 
+    const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+
+    const handleSelectAll = (checked: boolean | 'indeterminate') => {
+        setSelectedRows(checked ? paginatedData.map(item => item.id) : []);
+    };
+    
+    const handleSelectRow = (id: number, checked: boolean) => {
+        setSelectedRows(prev => checked ? [...prev, id] : prev.filter(rowId => rowId !== id));
+    };
 
     const handleDeleteClick = (item: any) => {
         setItemToDelete(item);
@@ -777,17 +864,41 @@ function RecentDocumentsTable({
 
     return (
         <>
+            <div className="mb-4 flex items-center gap-2">
+                {selectedRows.length > 0 && onBatchLancar && (
+                    <Button size="sm" onClick={() => { onBatchLancar(selectedRows); setSelectedRows([]); }}>
+                        <FileUp className="mr-2 h-4 w-4" /> Lançar Selecionados ({selectedRows.length})
+                    </Button>
+                )}
+                 {selectedRows.length > 0 && onBatchDelete && (
+                    <Button size="sm" variant="destructive" onClick={() => { onBatchDelete(selectedRows); setSelectedRows([]); }}>
+                        <Trash2 className="mr-2 h-4 w-4" /> Excluir Selecionados ({selectedRows.length})
+                    </Button>
+                )}
+            </div>
             <div className="overflow-x-auto rounded-md border">
                 <Table>
                     <TableHeader>
                         <TableRow>
+                            <TableHead className="w-12 text-center">
+                                 <Checkbox 
+                                    checked={selectedRows.length > 0 && selectedRows.length === paginatedData.length}
+                                    onCheckedChange={handleSelectAll}
+                                />
+                            </TableHead>
                             {headers.map(header => <TableHead key={header}>{header}</TableHead>)}
                             <TableHead className="w-[64px]"></TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {filteredData.length > 0 ? filteredData.map((item) => (
+                        {paginatedData.length > 0 ? paginatedData.map((item) => (
                             <TableRow key={item.id}>
+                               <TableCell className="text-center">
+                                    <Checkbox
+                                        checked={selectedRows.includes(item.id)}
+                                        onCheckedChange={(checked) => handleSelectRow(item.id, !!checked)}
+                                    />
+                                </TableCell>
                                {renderRow(item)}
                                <TableCell>
                                 <DropdownMenu>
@@ -816,13 +927,18 @@ function RecentDocumentsTable({
                             </TableRow>
                         )) : (
                             <TableRow>
-                                <TableCell colSpan={headers.length + 1} className="h-24 text-center">
+                                <TableCell colSpan={headers.length + 2} className="h-24 text-center">
                                     Nenhum documento encontrado.
                                 </TableCell>
                             </TableRow>
                         )}
                     </TableBody>
                 </Table>
+            </div>
+            <div className="flex items-center justify-end space-x-2 py-4">
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button>
+                <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages > 0 ? totalPages : 1}</span>
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages || totalPages === 0}>Próxima</Button>
             </div>
              <AlertDialog open={!!itemToDelete} onOpenChange={(open) => !open && setItemToDelete(null)}>
                 <AlertDialogContent>
@@ -849,6 +965,7 @@ function NotasFiscaisTable({
     onDelete,
     onView,
     onEdit,
+    onBatchDelete,
     searchTerm,
     filters,
 }: { 
@@ -857,10 +974,14 @@ function NotasFiscaisTable({
     onDelete: (nota: NotaFiscal) => void,
     onView: (nota: NotaFiscal) => void,
     onEdit: (nota: NotaFiscal) => void,
+    onBatchDelete: (ids: number[]) => void,
     searchTerm: string,
     filters: { startDate?: Date, endDate?: Date },
 }) {
     const [itemToDelete, setItemToDelete] = useState<NotaFiscal | null>(null);
+    const [selectedRows, setSelectedRows] = useState<number[]>([]);
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
 
     const filteredData = useMemo(() => {
         return data.filter(item => {
@@ -884,7 +1005,21 @@ function NotasFiscaisTable({
             return searchMatch && dateMatch;
         });
     }, [data, searchTerm, filters]);
+    
+    const paginatedData = useMemo(() => {
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        return filteredData.slice(startIndex, startIndex + itemsPerPage);
+    }, [filteredData, currentPage, itemsPerPage]);
 
+    const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+
+    const handleSelectAll = (checked: boolean | 'indeterminate') => {
+        setSelectedRows(checked ? paginatedData.map(item => item.id) : []);
+    };
+    
+    const handleSelectRow = (id: number, checked: boolean) => {
+        setSelectedRows(prev => checked ? [...prev, id] : prev.filter(rowId => rowId !== id));
+    };
 
     const handleDeleteClick = (item: NotaFiscal) => {
         setItemToDelete(item);
@@ -896,7 +1031,6 @@ function NotasFiscaisTable({
         }
         setItemToDelete(null);
     };
-
 
     if (!data) {
         return (
@@ -934,17 +1068,36 @@ function NotasFiscaisTable({
 
     return (
         <>
+        <div className="mb-4 flex items-center gap-2">
+            {selectedRows.length > 0 && (
+                <Button size="sm" variant="destructive" onClick={() => { onBatchDelete(selectedRows); setSelectedRows([]); }}>
+                    <Trash2 className="mr-2 h-4 w-4" /> Excluir Selecionadas ({selectedRows.length})
+                </Button>
+            )}
+        </div>
         <div className="overflow-x-auto rounded-md border">
             <Table>
                 <TableHeader>
                     <TableRow>
+                        <TableHead className="w-12 text-center">
+                            <Checkbox 
+                                checked={selectedRows.length > 0 && selectedRows.length === paginatedData.length}
+                                onCheckedChange={handleSelectAll}
+                            />
+                        </TableHead>
                         {headers.map(header => <TableHead key={header}>{header}</TableHead>)}
                         <TableHead className="w-[64px]"></TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                     {filteredData.length > 0 ? filteredData.map((item) => (
+                     {paginatedData.length > 0 ? paginatedData.map((item) => (
                         <TableRow key={item.id}>
+                            <TableCell className="text-center">
+                                <Checkbox
+                                    checked={selectedRows.includes(item.id)}
+                                    onCheckedChange={(checked) => handleSelectRow(item.id, !!checked)}
+                                />
+                            </TableCell>
                             {renderRow(item)}
                             <TableCell>
                                 <DropdownMenu>
@@ -967,7 +1120,7 @@ function NotasFiscaisTable({
                         </TableRow>
                     )) : (
                          <TableRow>
-                            <TableCell colSpan={headers.length + 1} className="h-24 text-center">
+                            <TableCell colSpan={headers.length + 2} className="h-24 text-center">
                                 {data.length === 0 ? `Nenhuma nota de ${tipo} encontrada.` : 'Nenhum resultado para a busca.'}
                             </TableCell>
                         </TableRow>
@@ -975,6 +1128,11 @@ function NotasFiscaisTable({
                 </TableBody>
             </Table>
         </div>
+         <div className="flex items-center justify-end space-x-2 py-4">
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>Anterior</Button>
+                <span className="text-sm text-muted-foreground">Página {currentPage} de {totalPages > 0 ? totalPages : 1}</span>
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages || totalPages === 0}>Próxima</Button>
+            </div>
         <AlertDialog open={!!itemToDelete} onOpenChange={(open) => !open && setItemToDelete(null)}>
             <AlertDialogContent>
                 <AlertDialogHeader>
@@ -1021,7 +1179,6 @@ function LancamentoDialog({ onOpenChange, tipoNota, initialData, onSave, isReadO
         const items = editingNota ? editingNota.items : initialData?.items;
         let effectiveTipo = editingNota ? (editingNota.tipo === 'entrada' ? 'produto' : editingNota.tipo) : tipoNota;
 
-        // If 'produto' is coming from the action tile, it means 'entrada'.
         if (effectiveTipo === 'produto' && !editingNota) {
             effectiveTipo = 'entrada';
         } else if (effectiveTipo === 'produto' && editingNota) {
@@ -1101,7 +1258,6 @@ function LancamentoDialog({ onOpenChange, tipoNota, initialData, onSave, isReadO
 
     const sections = tipoNotaValue === 'servico' ? serviceSections : productSections;
 
-    // Product Handlers
     const handleAddProduct = () => {
         if (isReadOnly) return;
         const newItem: ProductItem = { id: Date.now(), name: '', quantity: 1, price: 0.0, total: 0.0 };
@@ -1145,8 +1301,6 @@ function LancamentoDialog({ onOpenChange, tipoNota, initialData, onSave, isReadO
         }
     };
 
-
-    // Service Handlers
     const handleAddService = () => {
         if (isReadOnly) return;
         const newItem: ServiceItem = { id: Date.now(), name: '', value: 0.0 };
@@ -1208,8 +1362,8 @@ function LancamentoDialog({ onOpenChange, tipoNota, initialData, onSave, isReadO
     const totalProdutos = productItems.reduce((acc, item) => acc + item.total, 0);
     const totalServicos = serviceItems.reduce((acc, item) => acc + (Number(item.value) || 0), 0);
     
-    const totalDescontos = 0; // Placeholder
-    const totalImpostos = 0; // Placeholder
+    const totalDescontos = 0;
+    const totalImpostos = 0;
     const totalNota = tipoNotaValue === 'servico' ? totalServicos : totalProdutos;
     const totalLiquido = totalNota - totalDescontos - totalImpostos;
 
@@ -1311,7 +1465,6 @@ function LancamentoDialog({ onOpenChange, tipoNota, initialData, onSave, isReadO
                     <Card>
                         <CardHeader><CardTitle>5. Tributos da NFS-e</CardTitle></CardHeader>
                         <CardContent className="space-y-6">
-                            {/* ISS */}
                             <div>
                                 <h4 className="font-semibold text-primary mb-2">ISS</h4>
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 items-end">
@@ -1326,7 +1479,6 @@ function LancamentoDialog({ onOpenChange, tipoNota, initialData, onSave, isReadO
                                 </div>
                             </div>
                              <Separator />
-                            {/* Retenções Federais */}
                             <div>
                                 <h4 className="font-semibold text-primary mb-2">Retenções Federais (RFB)</h4>
                                 <div className="space-y-3">
@@ -1750,3 +1902,5 @@ const ServiceSelector = ({ services, selectedServiceName, onSelect, disabled }: 
         </Popover>
     );
 };
+
+    
