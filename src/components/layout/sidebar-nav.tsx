@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import {
@@ -15,6 +16,7 @@ import {
   Building2,
   Wrench,
   ShieldCheck,
+  AreaChart,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -40,6 +42,7 @@ const allNavItems: NavItem[] = [
   { id: 'pessoal', href: '/pessoal', label: 'Pessoal', icon: Users },
   { id: 'contabil', href: '/contabil', label: 'Contábil', icon: Book },
   { id: 'financeiro', href: '/financeiro', label: 'Financeiro', icon: Banknote },
+  { id: 'relatorios', href: '/relatorios', label: 'Relatórios', icon: AreaChart },
   { id: 'cadastros', href: '/cadastros', label: 'Cadastros', icon: Archive },
   { id: 'conectividade', href: '/conectividade', label: 'Conectividade', icon: Plug },
   { id: 'utilitarios', href: '/utilitarios', label: 'Utilitários', icon: Wrench },
@@ -53,10 +56,10 @@ const adminNavItem: NavItem = {
 };
 
 const planPermissions = {
-    'Gratuito': ['dashboard', 'cadastros'],
-    'Basico': ['dashboard', 'fiscal', 'financeiro', 'cadastros', 'conectividade'],
-    'Profissional': ['dashboard', 'fiscal', 'pessoal', 'contabil', 'financeiro', 'cadastros', 'conectividade', 'utilitarios'],
-    'Empresarial': ['dashboard', 'fiscal', 'pessoal', 'contabil', 'financeiro', 'cadastros', 'conectividade', 'utilitarios', 'admin']
+    'Gratuito': ['dashboard', 'cadastros', 'relatorios'],
+    'Basico': ['dashboard', 'fiscal', 'financeiro', 'cadastros', 'conectividade', 'relatorios'],
+    'Profissional': ['dashboard', 'fiscal', 'pessoal', 'contabil', 'financeiro', 'cadastros', 'conectividade', 'utilitarios', 'relatorios'],
+    'Empresarial': ['dashboard', 'fiscal', 'pessoal', 'contabil', 'financeiro', 'cadastros', 'conectividade', 'utilitarios', 'admin', 'relatorios']
 };
 
 
@@ -187,4 +190,3 @@ export function SidebarNav() {
     </div>
   );
 }
-
