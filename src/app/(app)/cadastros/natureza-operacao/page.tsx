@@ -257,7 +257,7 @@ function ItemForm({ onSave, onOpenChange, item }: ItemFormProps) {
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="geraFinanceiro">Gera Financeiro</Label>
-                         <Select value={geraFinanceiro} onValuecha_ve={(v) => setGeraFinanceiro(v as any)} required>
+                         <Select value={geraFinanceiro} onValueChange={(v) => setGeraFinanceiro(v as any)} required>
                             <SelectTrigger id="geraFinanceiro"><SelectValue placeholder="Selecione..." /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="Sim">Sim</SelectItem>
