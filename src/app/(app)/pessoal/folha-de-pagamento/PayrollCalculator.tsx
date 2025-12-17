@@ -13,7 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Badge } from '@/components/ui/badge';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
+import { format, parseISO, isValid } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { useToast } from '@/hooks/use-toast';
@@ -107,6 +107,13 @@ export default function PayrollCalculator() {
         setManualDescontos([]);
         setCalculation(null);
     }
+    
+    const handleEmployeeSelect = (id: string) => {
+        setSelectedEmployeeId(id);
+        clearForm();
+        setOpenEmployeeSelector(false);
+    }
+
 
     const handleCalculate = () => {
         if (!selectedEmployee) {
@@ -274,7 +281,7 @@ export default function PayrollCalculator() {
                [{ content: 'Empresa Pagadora', styles: { fontStyle: 'bold' } }, { content: 'Funcionário', styles: { fontStyle: 'bold' } }],
                [`${activeCompany.data?.razaoSocial || activeCompany.name}`, `Nome: ${selectedEmployee.nome}`],
                [`CNPJ: ${activeCompany.data?.cnpj || ''}`, `Cargo: ${selectedEmployee.cargo || 'N/A'}`],
-               [`Endereço: ${activeCompany.data?.logradouro || ''}, ${activeCompany.data?.numero || ''}`, `Data de Admissão: ${format(new Date(selectedEmployee.dataAdmissao), 'dd/MM/yyyy')}`],
+               [`Endereço: ${activeCompany.data?.logradouro || ''}, ${activeCompany.data?.numero || ''}`, `Data de Admissão: ${isValid(new Date(selectedEmployee.dataAdmissao)) ? format(new Date(selectedEmployee.dataAdmissao), 'dd/MM/yyyy') : 'N/A'}`],
            ],
        });
        finalY = (doc as any).lastAutoTable.finalY + 8;
@@ -372,7 +379,7 @@ export default function PayrollCalculator() {
                                     <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
                                         <Command><CommandInput placeholder="Pesquisar..." /><CommandList><CommandEmpty>Nenhum funcionário.</CommandEmpty><CommandGroup>
                                             {funcionarios.map((f) => (
-                                                <CommandItem key={f.id} value={f.nome} onSelect={() => { setSelectedEmployeeId(f.id.toString()); setOpenEmployeeSelector(false); clearForm(); }}>
+                                                <CommandItem key={f.id} value={f.nome} onSelect={() => handleEmployeeSelect(f.id.toString())}>
                                                     <Check className={cn("mr-2 h-4 w-4", selectedEmployeeId === f.id.toString() ? "opacity-100" : "opacity-0")} />
                                                     {f.nome}
                                                 </CommandItem>
@@ -425,7 +432,7 @@ export default function PayrollCalculator() {
                             </TabsList>
                             <TabsContent value="proventos" className="pt-4">
                                 <div className="space-y-2">
-                                    {manualProventos.map(p => (
+                                    {manualProventos.length > 0 ? manualProventos.map(p => (
                                         <div key={p.id} className="flex gap-2 items-center">
                                             <Select onValueChange={(rubricaId) => handleSelectRubrica(p.id, 'provento', rubricaId)}>
                                                 <SelectTrigger><SelectValue placeholder="Selecione a rubrica..." /></SelectTrigger>
@@ -436,13 +443,15 @@ export default function PayrollCalculator() {
                                             <MoneyInput id={`provento-${p.id}`} value={p.value || 0} onValueChange={(val) => handleUpdateRubricaValue(p.id, 'provento', val)} />
                                             <Button variant="ghost" size="icon" onClick={() => handleRemoveRubrica(p.id, 'provento')}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                                         </div>
-                                    ))}
+                                    )) : (
+                                        <p className='text-sm text-muted-foreground text-center p-4'>Nenhum provento manual.</p>
+                                    )}
                                     <Button variant="outline" size="sm" className="w-full" onClick={() => handleAddRubrica('provento')}><Plus className="mr-2 h-4 w-4" />Adicionar Provento</Button>
                                 </div>
                             </TabsContent>
                             <TabsContent value="descontos" className="pt-4">
                                 <div className="space-y-2">
-                                    {manualDescontos.map(d => (
+                                    {manualDescontos.length > 0 ? manualDescontos.map(d => (
                                         <div key={d.id} className="flex gap-2 items-center">
                                             <Select onValueChange={(rubricaId) => handleSelectRubrica(d.id, 'desconto', rubricaId)}>
                                                 <SelectTrigger><SelectValue placeholder="Selecione a rubrica..." /></SelectTrigger>
@@ -453,7 +462,9 @@ export default function PayrollCalculator() {
                                             <MoneyInput id={`desconto-${d.id}`} value={d.value || 0} onValueChange={(val) => handleUpdateRubricaValue(d.id, 'desconto', val)} />
                                             <Button variant="ghost" size="icon" onClick={() => handleRemoveRubrica(d.id, 'desconto')}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                                         </div>
-                                    ))}
+                                    )) : (
+                                         <p className='text-sm text-muted-foreground text-center p-4'>Nenhum desconto manual.</p>
+                                    )}
                                     <Button variant="outline" size="sm" className="w-full" onClick={() => handleAddRubrica('desconto')}><Plus className="mr-2 h-4 w-4" />Adicionar Desconto</Button>
                                 </div>
                             </TabsContent>
