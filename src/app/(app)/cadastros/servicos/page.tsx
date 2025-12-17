@@ -170,7 +170,7 @@ export default function ServicosPage() {
 }
 
 interface ItemFormProps {
-    onSave: (item: Omit<Service, 'id' | 'codigo' | 'tipo'>) => void;
+    onSave: (item: Omit<Service, 'id' | 'codigo'>) => void;
     onOpenChange: (open: boolean) => void;
     item: Service | null;
 }
