@@ -1,5 +1,5 @@
 'use client';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { MoreHorizontal, Plus, Search, Trash2, Pencil, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -187,7 +187,7 @@ function ItemForm({ onSave, onOpenChange, item }: ItemFormProps) {
     const [movimentaEstoque, setMovimentaEstoque] = useState<'Sim' | 'Não' | undefined>(undefined);
     const [geraFinanceiro, setGeraFinanceiro] = useState<'Sim' | 'Não' | undefined>(undefined);
 
-    useState(() => {
+    useEffect(() => {
         if (item) {
             setName(item.name);
             setCfop(item.cfop);
@@ -257,7 +257,7 @@ function ItemForm({ onSave, onOpenChange, item }: ItemFormProps) {
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="geraFinanceiro">Gera Financeiro</Label>
-                         <Select value={geraFinanceiro} onValueChange={(v) => setGeraFinanceiro(v as any)} required>
+                         <Select value={geraFinanceiro} onValuecha_ve={(v) => setGeraFinanceiro(v as any)} required>
                             <SelectTrigger id="geraFinanceiro"><SelectValue placeholder="Selecione..." /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="Sim">Sim</SelectItem>
