@@ -10,30 +10,39 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Label } from '@/components/ui/label';
-import { CalendarIcon, FileDown, Loader2, FileText, Users, Book } from 'lucide-react';
+import { CalendarIcon, FileDown, Loader2, FileText, Users, Book, Banknote } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { DateRange } from 'react-day-picker';
 import { useToast } from '@/hooks/use-toast';
-import { generatePdf } from './pdf-generator';
+import { generatePdf, generateCsv } from './pdf-generator';
 import { NotaFiscal } from '@/types/fiscal';
 import { SavedCalculation } from '@/types/pessoal';
 import { Account } from '@/types/contabil';
+import { Conta } from '@/types/financeiro';
 
-type Module = 'fiscal' | 'pessoal' | 'contabil';
+type Module = 'fiscal' | 'pessoal' | 'contabil' | 'financeiro';
 
 const reportOptions: Record<Module, { value: string; label: string }[]> = {
     fiscal: [
         { value: 'notas_saida', label: 'Relatório de Notas de Saída' },
         { value: 'notas_servico', label: 'Relatório de Notas de Serviço' },
+        { value: 'notas_entrada', label: 'Relatório de Notas de Entrada' },
     ],
     pessoal: [
         { value: 'resumo_folha', label: 'Resumo da Folha de Pagamento' },
+        { value: 'relacao_funcionarios', label: 'Relação de Funcionários' },
     ],
     contabil: [
         { value: 'plano_contas', label: 'Plano de Contas' },
+        { value: 'balancete', label: 'Balancete de Verificação' },
     ],
+    financeiro: [
+        { value: 'contas_a_receber', label: 'Contas a Receber' },
+        { value: 'contas_a_pagar', label: 'Contas a Pagar' },
+        { value: 'fluxo_caixa', label: 'Fluxo de Caixa' },
+    ]
 };
 
 
@@ -42,10 +51,14 @@ export default function RelatoriosPage() {
     const { useScopedData, companies, currentCompany } = useCompany();
     const searchParams = useSearchParams();
 
+    const [notasProduto] = useScopedData<NotaFiscal[]>('fiscal-notasProduto', []);
     const [notasSaida] = useScopedData<NotaFiscal[]>('fiscal-notasSaida', []);
     const [notasServico] = useScopedData<NotaFiscal[]>('fiscal-notasServico', []);
     const [savedCalculations] = useScopedData<SavedCalculation[]>('pessoal-calculos-salvos', []);
     const [planoDeContas] = useScopedData<Account[]>('contabil-plano-de-contas', []);
+    const [funcionarios] = useScopedData<any[]>('cadastros-funcionarios', []);
+    const [contasPagar] = useScopedData<Conta[]>('financeiro-contas-a-pagar', []);
+    const [contasReceber] = useScopedData<Conta[]>('financeiro-contas-a-receber', []);
     const activeCompany = useMemo(() => companies.find(c => c.id === currentCompany), [companies, currentCompany]);
 
     const [selectedModule, setSelectedModule] = useState<Module | undefined>(undefined);
@@ -68,7 +81,7 @@ export default function RelatoriosPage() {
         setSelectedReport(undefined);
     }
     
-    const handleGenerateReport = () => {
+    const handleGenerateReport = (format: 'pdf' | 'csv') => {
         if (!selectedModule || !selectedReport || !activeCompany) {
             toast({ variant: 'destructive', title: 'Seleção Incompleta', description: 'Por favor, selecione o módulo e o tipo de relatório.' });
             return;
@@ -76,23 +89,36 @@ export default function RelatoriosPage() {
 
         setIsLoading(true);
 
-        const dataSources = {
+        const dataSources: Record<string, any[]> = {
             notas_saida: notasSaida,
             notas_servico: notasServico,
+            notas_entrada: notasProduto,
             resumo_folha: savedCalculations,
+            relacao_funcionarios: funcionarios,
             plano_contas: planoDeContas,
+            balancete: savedCalculations, // Placeholder, will require real data
+            contas_a_pagar: contasPagar,
+            contas_a_receber: contasReceber,
+            fluxo_caixa: [...contasPagar, ...contasReceber],
         };
         
         // Timeout to simulate async generation and show loader
         setTimeout(() => {
             try {
-                generatePdf({
+                const generatorParams = {
                     module: selectedModule,
                     reportType: selectedReport,
                     data: (dataSources as any)[selectedReport] || [],
                     dateRange,
                     company: activeCompany,
-                });
+                };
+
+                if (format === 'pdf') {
+                    generatePdf(generatorParams);
+                } else {
+                    generateCsv(generatorParams);
+                }
+
                 toast({ title: 'Relatório Gerado!', description: 'Seu download começará em breve.' });
             } catch (error: any) {
                 toast({ variant: 'destructive', title: 'Erro ao Gerar Relatório', description: error.message });
@@ -107,6 +133,7 @@ export default function RelatoriosPage() {
             case 'fiscal': return <FileText className="h-5 w-5" />;
             case 'pessoal': return <Users className="h-5 w-5" />;
             case 'contabil': return <Book className="h-5 w-5" />;
+            case 'financeiro': return <Banknote className="h-5 w-5" />;
             default: return null;
         }
     };
@@ -123,7 +150,7 @@ export default function RelatoriosPage() {
             <Card className="max-w-3xl mx-auto">
                 <CardHeader>
                     <CardTitle>Gerador de Relatórios</CardTitle>
-                    <CardDescription>Selecione os parâmetros para gerar seu relatório em PDF.</CardDescription>
+                    <CardDescription>Selecione os parâmetros para gerar seu relatório em PDF ou CSV.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -131,12 +158,16 @@ export default function RelatoriosPage() {
                             <Label>1. Módulo</Label>
                              <Select value={selectedModule} onValueChange={handleModuleChange}>
                                 <SelectTrigger>
-                                    <SelectValue placeholder="Selecione o módulo..." />
+                                    <div className='flex items-center gap-2'>
+                                      {getModuleIcon(selectedModule)}
+                                      <SelectValue placeholder="Selecione o módulo..." />
+                                    </div>
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="fiscal">Fiscal</SelectItem>
-                                    <SelectItem value="pessoal">Pessoal</SelectItem>
-                                    <SelectItem value="contabil">Contábil</SelectItem>
+                                    <SelectItem value="fiscal"><div className='flex items-center gap-2'><FileText className="h-4 w-4"/> Fiscal</div></SelectItem>
+                                    <SelectItem value="pessoal"><div className='flex items-center gap-2'><Users className="h-4 w-4"/> Pessoal</div></SelectItem>
+                                    <SelectItem value="contabil"><div className='flex items-center gap-2'><Book className="h-4 w-4"/> Contábil</div></SelectItem>
+                                    <SelectItem value="financeiro"><div className='flex items-center gap-2'><Banknote className="h-4 w-4"/> Financeiro</div></SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -192,14 +223,22 @@ export default function RelatoriosPage() {
                         </Popover>
                     </div>
                 </CardContent>
-                <CardFooter>
-                     <Button className="w-full" size="lg" onClick={handleGenerateReport} disabled={isLoading || !selectedReport}>
+                <CardFooter className="flex flex-col sm:flex-row gap-2">
+                     <Button className="w-full" size="lg" onClick={() => handleGenerateReport('pdf')} disabled={isLoading || !selectedReport}>
                         {isLoading ? (
                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         ) : (
                             <FileDown className="mr-2 h-4 w-4" />
                         )}
-                        {isLoading ? 'Gerando...' : 'Gerar Relatório'}
+                        {isLoading ? 'Gerando PDF...' : 'Gerar Relatório (PDF)'}
+                    </Button>
+                     <Button className="w-full" size="lg" variant="outline" onClick={() => handleGenerateReport('csv')} disabled={isLoading || !selectedReport}>
+                        {isLoading ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                            <FileDown className="mr-2 h-4 w-4" />
+                        )}
+                        {isLoading ? 'Gerando CSV...' : 'Exportar para CSV'}
                     </Button>
                 </CardFooter>
             </Card>
