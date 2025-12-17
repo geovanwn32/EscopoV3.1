@@ -1,7 +1,8 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useCompany } from '@/hooks/use-company';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -39,6 +40,7 @@ const reportOptions: Record<Module, { value: string; label: string }[]> = {
 export default function RelatoriosPage() {
     const { toast } = useToast();
     const { useScopedData, companies, currentCompany } = useCompany();
+    const searchParams = useSearchParams();
 
     const [notasSaida] = useScopedData<NotaFiscal[]>('fiscal-notasSaida', []);
     const [notasServico] = useScopedData<NotaFiscal[]>('fiscal-notasServico', []);
@@ -53,6 +55,13 @@ export default function RelatoriosPage() {
         to: endOfMonth(new Date()),
     });
     const [isLoading, setIsLoading] = useState(false);
+    
+    useEffect(() => {
+        const moduleParam = searchParams.get('modulo') as Module;
+        if (moduleParam && ['fiscal', 'pessoal', 'contabil'].includes(moduleParam)) {
+            setSelectedModule(moduleParam);
+        }
+    }, [searchParams]);
 
     const handleModuleChange = (value: string) => {
         setSelectedModule(value as Module);
