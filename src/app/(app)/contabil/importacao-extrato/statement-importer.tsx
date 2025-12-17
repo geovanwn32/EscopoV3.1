@@ -78,7 +78,7 @@ export default function StatementImporter() {
       }
     };
     
-    const finalTransactions = [];
+    const finalTransactions: Transaction[] = [];
     for (const t of transactions) {
         const result = await processTransaction(t);
         finalTransactions.push(result);
